@@ -1,0 +1,62 @@
+name: Build & Deploy EPANET2.2 Sphinx Docs
+
+on:
+  push:
+    branches:
+      - master    # or "main"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DOCS_DIR: User_Manual/docs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Debug — list docs folder
+        run: |
+          echo "▶ Contents of $DOCS_DIR"
+          ls -R ${{ env.DOCS_DIR }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Debug — check Python & Sphinx
+        run: |
+          python --version
+          pip list
+          pip show sphinx || echo "⚠️ Sphinx not found"
+          pip show sphinx_rtd_theme || echo "⚠️ sphinx_rtd_theme not found"
+
+      - name: Install Sphinx dependencies
+        run: |
+          pip install -r ${{ env.DOCS_DIR }}/requirements.txt
+
+      - name: Build HTML (verbose)
+        run: |
+          sphinx-build -b html -v \
+            ${{ env.DOCS_DIR }} \
+            ${{ env.DOCS_DIR }}/_build/html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.DOCS_DIR }}/_build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
