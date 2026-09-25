@@ -1,0 +1,24 @@
+[TITLE]
+Metric cylindrical tank fidelity test
+
+[JUNCTIONS]
+ J1 100 0
+
+[RESERVOIRS]
+ R1 120
+
+[TANKS]
+ T1 100 5 1 10 5 0
+
+[PIPES]
+ P1 R1 J1 100 100 100 0 Open
+ P2 J1 T1 100 100 100 0 Open
+
+[OPTIONS]
+ Units LPS
+ Headloss H-W
+
+[TIMES]
+ Duration 0
+
+[END]
