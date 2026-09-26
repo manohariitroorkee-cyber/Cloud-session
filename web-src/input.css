@@ -1,3 +1,153 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Design tokens. Light is the base; dark applies for the OS setting unless the
+   host forces light, and whenever the host forces dark. */
+:root {
+  --bg: #eef2f4;
+  --panel: #ffffff;
+  --sunk: #f4f7f8;
+  --canvas: #f8fafb;
+  --grid-minor: #e6ecef;
+  --grid-major: #d3dce1;
+  --ink: #15212b;
+  --muted: #5a6b77;
+  --line: #d6dfe4;
+  --accent: #0e6c78;
+  --accent-hover: #0a5761;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcf0f2;
+  --link: #3b4a55;
+  --select: #e08a00;
+  --crit: #d03b3b;
+  --good: #0a7d2c;
+  /* sequential pressure ramp, low → high */
+  --seq-1: #86b6ef;
+  --seq-2: #5598e7;
+  --seq-3: #2a78d6;
+  --seq-4: #1c5cab;
+  --seq-5: #104281;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1418;
+    --panel: #151d22;
+    --sunk: #111a1f;
+    --canvas: #10181c;
+    --grid-minor: #18232a;
+    --grid-major: #22313a;
+    --ink: #e2e9ed;
+    --muted: #93a4b0;
+    --line: #26343c;
+    --accent: #38b2c1;
+    --accent-hover: #5cc6d3;
+    --accent-ink: #062226;
+    --accent-soft: #123a40;
+    --link: #a9b8c2;
+    --select: #f2a93b;
+    --crit: #e05555;
+    --good: #3cc46a;
+    --seq-1: #184f95;
+    --seq-2: #256abf;
+    --seq-3: #3987e5;
+    --seq-4: #6da7ec;
+    --seq-5: #b7d3f6;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1418;
+  --panel: #151d22;
+  --sunk: #111a1f;
+  --canvas: #10181c;
+  --grid-minor: #18232a;
+  --grid-major: #22313a;
+  --ink: #e2e9ed;
+  --muted: #93a4b0;
+  --line: #26343c;
+  --accent: #38b2c1;
+  --accent-hover: #5cc6d3;
+  --accent-ink: #062226;
+  --accent-soft: #123a40;
+  --link: #a9b8c2;
+  --select: #f2a93b;
+  --crit: #e05555;
+  --good: #3cc46a;
+  --seq-1: #184f95;
+  --seq-2: #256abf;
+  --seq-3: #3987e5;
+  --seq-4: #6da7ec;
+  --seq-5: #b7d3f6;
+}
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+.font-mono, kbd, pre, code { font-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace; }
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-sunk focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent;
+  }
+  .btn:has(input:focus-visible) { @apply outline outline-2 outline-offset-1 outline-accent; }
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60;
+  }
+  .btn-danger {
+    @apply inline-flex items-center rounded-md bg-crit px-3 py-1.5 text-[13px] font-semibold text-white;
+  }
+  .tool {
+    @apply flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-muted transition-colors hover:bg-sunk hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent lg:w-36;
+  }
+  .tool svg { @apply h-4 w-4 shrink-0; }
+  .tool span { @apply hidden sm:inline; }
+  .tool kbd { @apply ml-auto hidden rounded border border-line px-1 text-[10px] leading-4 text-muted lg:inline; }
+  .tool[aria-pressed="true"] { @apply bg-accent-soft font-medium text-ink; }
+  .tool[aria-pressed="true"] svg { @apply text-accent; }
+  .tool:disabled { @apply cursor-default opacity-40 hover:bg-transparent; }
+  .tool-sep { @apply mx-1 w-px shrink-0 bg-line lg:mx-0 lg:my-1 lg:h-px lg:w-auto; }
+  .zbtn { @apply flex h-8 w-8 items-center justify-center text-base text-ink hover:bg-sunk focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent; }
+  .tab {
+    @apply rounded-md px-2.5 py-1 text-[13px] text-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent;
+  }
+  .tab[aria-selected="true"] { @apply bg-sunk font-medium text-ink; }
+  .pill { @apply rounded-full px-2 py-0.5 text-[11px] font-medium; }
+  .pill:empty { @apply hidden; }
+  .field { @apply grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-x-3 text-[13px]; }
+  .field > span:first-child { @apply text-muted; }
+  .field input, .field select, .inp {
+    @apply w-full rounded-md border border-line bg-panel px-2 py-1 text-[13px] tabular-nums text-ink outline-none focus:border-accent focus:ring-1 focus:ring-accent;
+  }
+  .field input[type="checkbox"] { @apply h-4 w-4 justify-self-start accent-[var(--accent)]; }
+  .unit { @apply relative; }
+  .unit > input { @apply pr-11; }
+  .unit > i { @apply pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] not-italic text-muted; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted; }
+  .rtable { @apply w-full border-collapse text-[13px] tabular-nums; }
+  .rtable th { @apply sticky top-0 z-[1] border-b border-line bg-panel px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted; }
+  .rtable th.num, .rtable td.num { @apply text-right; }
+  .rtable td { @apply border-b border-line px-3 py-1; }
+  .rtable tr { @apply cursor-pointer; }
+  .rtable tbody tr:hover { @apply bg-sunk; }
+  .rtable tr[aria-selected="true"] { @apply bg-accent-soft; }
+}
+
+/* Canvas */
+.bg-canvas { background: var(--canvas); }
+#canvas .lnk { stroke: var(--link); stroke-linecap: round; }
+#canvas .lnk-hit { stroke: transparent; stroke-width: 14px; cursor: pointer; }
+#canvas .node { cursor: pointer; }
+#canvas .lbl { fill: var(--muted); font-size: 11px; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; paint-order: stroke; stroke: var(--canvas); stroke-width: 3px; }
+#canvas .sel { stroke: var(--select); stroke-width: 2.5px; fill: none; }
+#canvas.tool-select { cursor: grab; }
+#canvas.tool-select.panning { cursor: grabbing; }
+#canvas.tool-add { cursor: crosshair; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

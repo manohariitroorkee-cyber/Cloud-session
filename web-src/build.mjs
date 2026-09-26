@@ -3,6 +3,7 @@
 // inlined, so it works offline with no CDN.
 //
 //   cd web-src && npm install && npm run build
+//   node build.mjs <path>   also writes the page body alone (for claude.ai artifacts)
 
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
@@ -37,9 +38,28 @@ const css = execFileSync(
 appJs = appJs.replace(/<\/script/gi, "<\\/script");
 const safeCss = css.replace(/<\/style/gi, "<\\/style");
 
-const html = readFileSync(here("./template.html"), "utf8")
+const body = readFileSync(here("./template.html"), "utf8")
   .replace("/*__TAILWIND_CSS__*/", () => safeCss)
   .replace("/*__APP_JS__*/", () => appJs);
 
+// The repo copy is a complete document that opens straight from disk.
+const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+${body}
+</body>
+</html>
+`;
 writeFileSync(here("../index.html"), html);
 console.log(`index.html written: ${(html.length / 1024).toFixed(0)} KB`);
+
+// Optional: page-body variant for hosts that supply their own <html> skeleton.
+const artifactOut = process.argv[2];
+if (artifactOut) {
+  writeFileSync(artifactOut, body);
+  console.log(`page body written to ${artifactOut}`);
+}
