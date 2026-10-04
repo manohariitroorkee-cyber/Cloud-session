@@ -23,3 +23,24 @@ parameters:
     description: Minimum vertical curve length where a grade change exists
     source: {clause: "Design basis", note: "Confirm against IRC:SP:23"}
     verification: project_decision
+
+  transition_required_shift_m:
+    value: 0.25
+    unit: m
+    description: A transition may be omitted when the shift it would produce (Ls²/24R) is not more than this
+    source: {clause: "Design basis", note: "Common practice threshold – confirm against IRC:38 / IRC:73 for the project"}
+    verification: project_decision
+
+  broken_back_min_tangent_m:
+    value: 100
+    unit: m
+    description: Minimum straight between two curves turning the same way before it is treated as a broken-back curve
+    source: {clause: "Design basis", note: "No code value encoded – set per project"}
+    verification: project_decision
+
+  compound_radius_ratio_max:
+    value: 1.5
+    unit: "-"
+    description: Largest ratio of adjoining radii in a compound curve without a transition between them
+    source: {clause: "Design basis", note: "Commonly quoted guidance; IRC clause not confirmed"}
+    verification: project_decision

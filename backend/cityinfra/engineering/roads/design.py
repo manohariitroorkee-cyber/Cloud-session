@@ -5,10 +5,17 @@ affected by the road levels.
 Out of scope by decision: pavement thickness design, structural (RCC)
 design, earthwork and quantities.
 
-ROAD_ALIGNMENT object (LineString through start, PIs, end) attributes:
-    design_speed_kmh, terrain ("plain"/"rolling"),
-    curves:  {"1": [radius_m, transition_m], ...}     keyed by PI index
-    profile: [[chainage, level, vertical_curve_length], ...]
+ROAD_ALIGNMENT object attributes:
+    design_speed_kmh
+    horizontal_mode: how the drawn geometry is read (default "pi")
+        "pi"       geometry = start, PIs, end; curves = {"1": spec, ...} (see alignment.normalise_spec:
+                   simple, equal/unequal transitions, spiral–spiral, compound with transitions)
+        "elements" geometry = start point (and optionally a second point for the start bearing);
+                   elements = [{"line": 100}, {"spiral": 40, "to_R": 30, "turn": "left"}, {"arc_deg": 200, ...}]
+        "bulges"   geometry = CAD polyline vertices; bulges = [b0, b1, ...] (DXF LWPOLYLINE)
+        "fit"      geometry = freehand / traced centreline; tangents and radii are fitted
+    profile: [[chainage, level, curve_length], ...] or [chainage, level, L_before, L_after] for an
+             unsymmetrical curve; the last chainage may be "end" (= alignment length)
     template: cross-section template (see cross_section.py)
     section_interval_m: spacing of cross-sections (default 20)
 """
@@ -22,11 +29,12 @@ from ...gis.geometry import line_coords, point_coord
 from ...model.core import EngineeringObject, ObjectKind, Project, RelationType
 from ...rules.framework import CheckResult, CheckStatus, RuleContext
 from . import cross_section as xs
-from .horizontal import HorizontalAlignment, build
+from . import alignment as hz
+from .horizontal import HorizontalAlignment
 from .vertical import VIP, TIN, VerticalAlignment, crest_length_for, sag_length_for, ssd
 
-METHOD = ("Horizontal: circular curves with clothoid transitions; vertical: symmetric parabolic curves; "
-          "ground: linear TIN")
+METHOD = ("Horizontal: chain of straights, circular arcs and clothoids (any combination) evaluated exactly "
+          "(Gauss–Legendre for clothoids); vertical: symmetric or unsymmetrical parabolic curves; ground: linear TIN")
 
 # objects whose top level should follow the finished road surface
 LEVEL_KEYS = {ObjectKind.MANHOLE: "ground_level", ObjectKind.DRAIN_NODE: "ground_level",
@@ -65,14 +73,45 @@ def terrain(pr: Project) -> TIN | None:
     return TIN(pts) if len(pts) >= 3 else None
 
 
+def horizontal_of(road: EngineeringObject) -> HorizontalAlignment:
+    coords = [tuple(c[:2]) for c in line_coords(road.geometry)] if road.geometry["type"] == "LineString" \
+        else [tuple(point_coord(road.geometry)[:2])]
+    mode = road.attr("horizontal_mode", "pi")
+    if mode == "pi":
+        specs = {int(k): v for k, v in (road.attr("curves") or {}).items()}
+        return hz.from_pis(coords, specs)
+    if mode == "elements":
+        if road.attr("start_bearing_deg") is not None:
+            b0 = math.radians(float(road.attr("start_bearing_deg")))
+        elif len(coords) > 1:
+            b0 = hz.bearing(coords[0], coords[1])
+        else:
+            raise ValueError("element mode needs start_bearing_deg or a second geometry point")
+        return hz.from_elements(coords[0], b0, road.attr("elements") or [])
+    if mode == "bulges":
+        return hz.from_bulges(coords, road.attr("bulges") or [])
+    if mode == "fit":
+        pis, specs, rep = hz.fit_drawn(coords, **(road.attr("fit_options") or {}))
+        al = hz.from_pis(pis, specs)
+        al.source, al.fit_report = "fit", rep
+        al.errors = list(rep["errors"]) if rep["errors"] else al.errors
+        return al
+    raise ValueError(f"unknown horizontal_mode {mode!r}")
+
+
 def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> RoadDesign:
-    pis = [tuple(c[:2]) for c in line_coords(road.geometry)]
-    curves = {int(k): (float(v[0]), float(v[1])) for k, v in (road.attr("curves") or {}).items()}
-    h = build(pis, curves)
-    v = VerticalAlignment([VIP(*map(float, p)) for p in road.attr("profile")])
+    try:
+        h = horizontal_of(road)
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"Road {road.label}: {e}") from e
+    prof = [list(p) for p in road.attr("profile")]
+    if prof and prof[-1][0] in ("end", None):
+        prof[-1][0] = h.length
+    v = VerticalAlignment([VIP(*map(float, p)) for p in prof])
     errors = list(h.errors) + list(v.errors)
     if abs(v.vips[-1].chainage - h.length) > 0.5:
-        errors.append(f"Profile ends at ch {v.vips[-1].chainage:.2f} but alignment length is {h.length:.2f} m.")
+        errors.append(f"Profile ends at ch {v.vips[-1].chainage:.2f} but alignment length is {h.length:.2f} m "
+                      f"(use \"end\" as the last chainage to follow the alignment).")
     tpl = road.attr("template")
     tin = terrain(pr)
     sections: list[xs.Section] = []
@@ -94,29 +133,95 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
 def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
     r = d.road
     V = float(r.attr("design_speed_kmh"))
+    v = V / 3.6
     out: list[CheckResult] = []
     e_max, f_lat = rules.get("e_max"), rules.get("f_lateral")
     rmin = V * V / (127 * (e_max.value + f_lat.value))
-    for c in d.h.curves:
-        lbl = f"{r.label} PI{c.pi_index}"
-        out.append(CheckResult("min_radius", r.id, lbl, CheckStatus.PASS if c.radius >= rmin else CheckStatus.FAIL,
-                               f"R {c.radius:.0f} m vs R_min {rmin:.0f} m = V²/127(e+f) at {V:.0f} km/h",
-                               c.radius, rmin, "m", e_max))
-        # transition length: centrifugal-acceleration criterion and superelevation run-off criterion
-        cpar = rules.get("c_rate")
-        C = min(max(cpar.value["numerator"] / (cpar.value["offset"] + V), cpar.value["min"]), cpar.value["max"])
-        v = V / 3.6
-        ls1 = v ** 3 / (C * c.radius)
-        e_des = min(V * V / (rules.value("e_design_divisor") * c.radius), e_max.value)
-        npar = rules.get("superelevation_runoff_N")
-        w_rot = _rotated_width(r.attr("template"))
-        ls2 = e_des * npar.value * w_rot
-        need = max(ls1, ls2)
-        out.append(CheckResult("transition_length", r.id, lbl,
-                               CheckStatus.PASS if c.spiral >= need - 1e-6 else CheckStatus.FAIL,
-                               f"Ls {c.spiral:.1f} m vs required {need:.1f} m (v³/CR = {ls1:.1f} m with C = {C:.2f}; "
-                               f"run-off e·N·W = {ls2:.1f} m with e = {e_des*100:.1f} %, W = {w_rot:.2f} m)",
-                               c.spiral, need, "m", cpar))
+    cpar = rules.get("c_rate")
+    C = min(max(cpar.value["numerator"] / (cpar.value["offset"] + V), cpar.value["min"]), cpar.value["max"])
+    npar = rules.get("superelevation_runoff_N")
+    w_rot = _rotated_width(r.attr("template"))
+    e_of = lambda k: 0.0 if abs(k) < 1e-12 else math.copysign(
+        min(V * V * abs(k) / rules.value("e_design_divisor"), e_max.value), k)
+
+    def ls_required(k0: float, k1: float) -> tuple[float, float, float]:
+        """(required length, centrifugal criterion, run-off criterion) for a change of curvature k0 → k1."""
+        l1 = v ** 3 * abs(k1 - k0) / C
+        l2 = abs(e_of(k1) - e_of(k0)) * npar.value * w_rot
+        return max(l1, l2), l1, l2
+
+    shift_par = rules.get("transition_required_shift_m")
+    for k, (ch, ang) in enumerate(d.h.kinks, 1):
+        out.append(CheckResult("kink", r.id, f"{r.label} ch {ch:.1f}", CheckStatus.FAIL,
+                               f"Angle point of {math.degrees(ang):+.2f}° with no curve: the drawn straights/arcs are "
+                               f"not tangent here. Insert a curve or make the arc tangent.", math.degrees(abs(ang)), 0, "°"))
+    els = d.h.elements
+    for g in d.h.groups:
+        lbl = f"{r.label} {g.tag}"
+        for e in g.elements:
+            if e.kind == "arc":
+                R = e.radius
+                out.append(CheckResult("min_radius", r.id, lbl, CheckStatus.PASS if R >= rmin - 1e-9 else CheckStatus.FAIL,
+                                       f"R {R:.1f} m vs R_min {rmin:.1f} m = V²/127(e+f) at {V:.0f} km/h",
+                                       R, rmin, "m", e_max))
+        # every change of curvature inside the group and at its two ends
+        idx0 = els.index(g.elements[0])
+        seq = ([els[idx0 - 1]] if idx0 > 0 else []) + g.elements + \
+              ([els[idx0 + len(g.elements)]] if idx0 + len(g.elements) < len(els) else [])
+        prev_k = 0.0 if idx0 == 0 else None
+        for j, e in enumerate(seq):
+            if e.kind == "spiral":
+                need, l1, l2 = ls_required(e.k0, e.k1)
+                out.append(CheckResult(
+                    "transition_length", r.id, f"{lbl} spiral R {hz._r(e.k0)} → {hz._r(e.k1)}",
+                    CheckStatus.PASS if e.length >= need - 1e-6 else CheckStatus.FAIL,
+                    f"Ls {e.length:.1f} m vs required {need:.1f} m (v³·Δk/C = {l1:.1f} m with C = {C:.2f}; "
+                    f"run-off Δe·N·W = {l2:.1f} m, W = {w_rot:.2f} m)", e.length, need, "m", cpar))
+            if j > 0:
+                a_, b_ = seq[j - 1], e
+                ka, kb = a_.k1, b_.k0
+                if abs(ka - kb) > 1e-9:                    # curvature jumps: no transition here
+                    need, l1, l2 = ls_required(ka, kb)
+                    Rj = 1 / max(abs(ka), abs(kb))
+                    if abs(ka) > 1e-12 and abs(kb) > 1e-12 and ka * kb > 0:
+                        ratio = max(abs(ka), abs(kb)) / min(abs(ka), abs(kb))
+                        rp = rules.get("compound_radius_ratio_max")
+                        out.append(CheckResult("compound_ratio", r.id, lbl,
+                                               CheckStatus.PASS if ratio <= rp.value + 1e-9 else CheckStatus.WARNING,
+                                               f"Compound curve without transition: radius ratio {ratio:.2f} vs {rp.value}",
+                                               ratio, rp.value, "-", rp))
+                    else:
+                        p_need = need * need / (24 * Rj)
+                        ok = p_need <= shift_par.value + 1e-9
+                        what = "reverse curve" if ka * kb < 0 else "curve"
+                        out.append(CheckResult(
+                            "transition_missing", r.id, lbl, CheckStatus.PASS if ok else CheckStatus.FAIL,
+                            f"{what.capitalize()} meets {'a straight' if ka * kb == 0 else 'the opposite curve'} with no "
+                            f"transition (R {Rj:.0f} m). Required transition {need:.1f} m would shift the curve by "
+                            f"{p_need:.3f} m vs {shift_par.value} m: " +
+                            ("transition may be omitted." if ok else "provide a transition."),
+                            p_need, shift_par.value, "m", shift_par))
+    # tangents between curve groups: broken-back and reverse curves
+    bb = rules.get("broken_back_min_tangent_m")
+    for g1, g2 in zip(d.h.groups, d.h.groups[1:]):
+        t = g2.ch_start - g1.ch_end
+        s1 = math.copysign(1, g1.elements[-1].k0 + g1.elements[-1].k1 or g1.delta)
+        s2 = math.copysign(1, g2.elements[0].k0 + g2.elements[0].k1 or g2.delta)
+        lbl = f"{r.label} {g1.tag}–{g2.tag}"
+        if s1 == s2:
+            out.append(CheckResult("broken_back", r.id, lbl, CheckStatus.PASS if t >= bb.value - 1e-9 else CheckStatus.WARNING,
+                                   f"Same-direction curves separated by {t:.1f} m of straight vs {bb.value} m: "
+                                   + ("acceptable." if t >= bb.value else "broken-back curve – consider one curve."),
+                                   t, bb.value, "m", bb))
+        else:
+            k_end, k_start = g1.elements[-1], g2.elements[0]
+            has_tr = k_end.kind == "spiral" and k_start.kind == "spiral"
+            need = 0.0 if has_tr else (ls_required(0, k_end.k1)[2] + ls_required(0, k_start.k0)[2])
+            out.append(CheckResult("reverse_curve", r.id, lbl, CheckStatus.PASS if t >= need - 1e-6 else CheckStatus.FAIL,
+                                   f"Reverse curves separated by {t:.1f} m of straight; "
+                                   + ("both have transitions, so they may meet directly." if has_tr else
+                                      f"{need:.1f} m needed to change superelevation from one side to the other."),
+                                   t, need, "m", npar))
     gmax, gmin = rules.get("max_grade_pct"), rules.get("min_grade_pct")
     for i in range(len(d.v.vips) - 1):
         g = d.v.grade(i) * 100

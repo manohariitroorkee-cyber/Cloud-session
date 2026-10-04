@@ -208,3 +208,42 @@ def sample_electrical_project() -> Project:
         pr.relate(c, n[a], RelationType.UPSTREAM_NODE)
         pr.relate(c, n[b], RelationType.DOWNSTREAM_NODE)
     return pr
+
+
+def sample_junction_project() -> Project:
+    """A four-arm cross with a skewed minor arm and a plot inside one sight
+    triangle; a T-junction built from two road alignments; a four-arm roundabout."""
+    pr = Project("Synthetic sector junctions", crs_epsg=32643)
+    # 1. cross intersection, explicit arms
+    pr.add(EngineeringObject(ObjectKind.ROAD_JUNCTION, _pt(0, 0), name="J-CROSS", attributes={
+        "type": "intersection", "control": "uncontrolled", "design_vehicle": "bus",
+        "arms": [{"name": "N", "bearing_deg": 0, "width_left": 7.6, "width_right": 7.6, "speed_kmh": 40, "priority": "major"},
+                 {"name": "E", "bearing_deg": 95, "width_left": 3.5, "width_right": 3.5, "speed_kmh": 30},
+                 {"name": "S", "bearing_deg": 180, "width_left": 7.6, "width_right": 7.6, "speed_kmh": 40, "priority": "major"},
+                 {"name": "W", "bearing_deg": 310, "width_left": 3.5, "width_right": 3.5, "speed_kmh": 30}],   # 50° skew
+        "corner": {"type": "three_centred", "ratio": 2, "end_deflection_deg": 15}}))
+    pr.add(EngineeringObject(ObjectKind.PLOT, _poly((14, 14), (40, 14), (40, 40), (14, 40)), name="PLOT-NE"))
+    # 2. T-junction from road alignments (two straight roads meeting at (600, 0))
+    tpl = {"strips": [{"type": "carriageway", "width": 3.5, "crossfall_pct": -2.5},
+                      {"type": "footpath", "width": 1.8, "crossfall_pct": 2.0, "step_m": 0.15}]}
+    main = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln((400, 0), (800, 0)), name="MAIN", attributes={
+        "design_speed_kmh": 40, "priority": "major", "curves": {}, "template": tpl,
+        "profile": [[0, 216.0, 0], ["end", 215.6, 0]]}))
+    side = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln((600, 0), (600, 250)), name="SIDE", attributes={
+        "design_speed_kmh": 30, "curves": {}, "template": tpl, "profile": [[0, 216.0, 0], ["end", 216.5, 0]]}))
+    _ = (main, side)
+    pr.add(EngineeringObject(ObjectKind.ROAD_JUNCTION, _pt(600, 0), name="J-T", attributes={
+        "type": "intersection", "control": "priority", "design_vehicle": "bus",
+        "arms": [{"road": "SIDE"}, {"name": "MAIN-E", "bearing_deg": 90, "width_left": 3.5, "width_right": 3.5,
+                                    "speed_kmh": 40, "priority": "major"},
+                 {"name": "MAIN-W", "bearing_deg": 270, "width_left": 3.5, "width_right": 3.5, "speed_kmh": 40,
+                  "priority": "major"}]}))
+    # 3. roundabout
+    pr.add(EngineeringObject(ObjectKind.ROAD_JUNCTION, _pt(0, -600), name="J-RB", attributes={
+        "type": "roundabout",
+        "arms": [{"name": n, "bearing_deg": b, "width_left": 7.0, "width_right": 7.0, "speed_kmh": 40}
+                 for n, b in (("N", 0), ("E", 90), ("S", 180), ("W", 270))],
+        "roundabout": {"central_island_radius_m": 27, "circulatory_width_m": 10, "entry_radius_m": 20,
+                       "exit_radius_m": 25, "setting": "urban",
+                       "flows_pcu_h": {"N-E": {"total": 2200, "weaving": 1100}}}}))
+    return pr

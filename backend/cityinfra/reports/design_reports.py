@@ -83,19 +83,35 @@ def road(project_name: str, d, rules: RuleContext, impacts: list[dict], tin=None
          f"- Method: {__import__('cityinfra.engineering.roads.design', fromlist=['METHOD']).METHOD}.",
          "", "## 2. Design criteria used", ""] + _criteria(rules, d.checks, [
              "f_lateral", "e_design_divisor", "superelevation_runoff_N", "reaction_time_s", "eye_height_m",
-             "object_height_m", "headlight_height_m", "headlight_beam_deg", "min_vertical_curve_m"])
+             "object_height_m", "headlight_height_m", "headlight_beam_deg", "min_vertical_curve_m",
+             "transition_required_shift_m", "broken_back_min_tangent_m", "compound_radius_ratio_max"])
     if d.errors:
         L += ["", "## Errors", ""] + [f"- {e}" for e in d.errors]
-    L += ["", "## 3. Horizontal curves", "",
-          "| PI | Δ (°) | R (m) | Ls (m) | Ts (m) | Lc (m) | E (m) | Ch TS | Ch SC | Ch CS | Ch ST |",
-          "|---|---|---|---|---|---|---|---|---|---|---|"]
-    for c in d.h.curves:
-        L.append(f"| PI{c.pi_index} | {math.degrees(c.delta):+.3f} | {c.radius:.0f} | {c.spiral:.1f} | {c.ts:.3f} | "
-                 f"{c.lc:.3f} | {c.external:.3f} | {c.ch_ts:.3f} | {c.ch_sc:.3f} | {c.ch_cs:.3f} | {c.ch_st:.3f} |")
-    L += ["", "## 4. Vertical alignment", "", "| VIP ch | Level | VC length (m) | Grade out (%) |", "|---|---|---|---|"]
+    L += ["", "## 3. Horizontal alignment", "",
+          f"Geometry entered as: **{ {'pi': 'PI polyline with curve at each PI', 'elements': 'element chain', 'bulges': 'CAD polyline with arcs', 'fit': 'freehand trace, fitted'}.get(d.h.source, d.h.source) }**.", ""]
+    if d.h.fit_report:
+        fr = d.h.fit_report
+        L += [f"Fitted from the drawing: {fr['curves']} curve(s), radii {fr['radii_m']} m; deviation from the drawn "
+              f"line max {fr['max_deviation_m']} m, mean {fr['mean_deviation_m']} m (tolerance {fr['tolerance_m']} m)."]
+        L += [f"- {n}" for n in fr["notes"]] + [""]
+    L += ["| Curve | Type | Δ (°) | Radii (m) | Ls in (m) | Ls out (m) | T in (m) | T out (m) | Arc (m) | Length (m) | Ch start | Ch end |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for g in d.h.groups:
+        radii = ", ".join(f"{r:.0f}" for r in g.radii) or "–"
+        t_a = f"{g.t_in:.3f}" if g.pi is not None else "–"
+        t_b = f"{g.t_out:.3f}" if g.pi is not None else "–"
+        L.append(f"| {g.tag} | {g.kind} | {math.degrees(g.delta):+.3f} | {radii} | {g.spiral_in:.1f} | {g.spiral_out:.1f} | "
+                 f"{t_a} | {t_b} | {g.arc_length:.3f} | {g.length:.3f} | {g.ch_start:.3f} | {g.ch_end:.3f} |")
+    L += ["", "Element schedule:", "", "| # | Element | Ch start | Length (m) | Radius start → end | Start E | Start N | Start bearing (°) |",
+          "|---|---|---|---|---|---|---|---|"]
+    from ..engineering.roads.alignment import _r
+    for i, e in enumerate(d.h.elements, 1):
+        L.append(f"| {i} | {e.kind} {e.tag} | {e.ch0:.3f} | {e.length:.3f} | {_r(e.k0)} → {_r(e.k1)} | {e.x0:.3f} | {e.y0:.3f} | "
+                 f"{math.degrees(e.b0) % 360:.4f} |")
+    L += ["", "## 4. Vertical alignment", "", "| VIP ch | Level | VC before VIP (m) | VC after VIP (m) | Grade out (%) |", "|---|---|---|---|---|"]
     for i, v in enumerate(d.v.vips):
         g = f"{d.v.grade(i)*100:+.3f}" if i < len(d.v.vips) - 1 else "–"
-        L.append(f"| {v.chainage:.3f} | {v.level:.3f} | {v.curve_length:.0f} | {g} |")
+        L.append(f"| {v.chainage:.3f} | {v.level:.3f} | {v.la:.1f} | {v.lb:.1f} | {g} |")
     L += ["", "## 5. Checks not passed", ""] + _failed(d.checks)
     if tin is not None:
         L += ["", "## 6. Long-section (every 20 m)", "", "| Ch | FRL | Ground | FRL − ground |", "|---|---|---|---|"]
@@ -154,6 +170,52 @@ def electrical(project_name: str, net, res, rules: RuleContext, sched: dict) -> 
     L += ["", "## 7. Checks not passed", ""] + _failed(res.checks)
     if res.proposals:
         L += ["", "## 8. Proposed changes (not applied)", ""] + [f"- {p}" for p in res.proposals]
+    L += ["", "## Review and approval", "", "| Role | Name / designation | Decision | Date |", "|---|---|---|---|",
+          "| Designed by | | | |", "| Checked by | | | |", "| Approved by | | | |", ""]
+    return "\n".join(L)
+
+
+def junction(project_name: str, d, rules: RuleContext) -> str:
+    j = d.junction
+    L = [f"# Junction design check – {j.label} ({d.kind}) – {project_name}", "", BANNER, "",
+         "Scope: geometric design – arm angles, kerb returns, sight triangles; for roundabouts the circle, "
+         "entry/exit kerbs, weaving sections and (if flows are given) weaving capacity. Swept-path analysis, "
+         "signal design and structural design are not covered.", "",
+         "## 1. Design criteria used", ""] + _criteria(rules, d.checks, [])
+    if d.errors:
+        L += ["", "## Errors", ""] + [f"- {e}" for e in d.errors]
+    L += ["", "## 2. Arms", "", "| Arm | Bearing (°) | Edge left (m) | Edge right (m) | Speed (km/h) | Priority | Road |",
+          "|---|---|---|---|---|---|---|"]
+    L += [f"| {a.name} | {math.degrees(a.bearing) % 360:.2f} | {a.w_left:.2f} | {a.w_right:.2f} | {a.speed:.0f} | {a.priority} | "
+          f"{a.road.label if a.road else '–'} |" for a in d.arms]
+    if d.corners:
+        L += ["", "## 3. Kerb returns", "", "| Corner | Sector (°) | Type | Radii (m) | Tangent in (m) | Tangent out (m) | Kerb length (m) | PI E | PI N |",
+              "|---|---|---|---|---|---|---|---|---|"]
+        for c in d.corners:
+            if c.group is None:
+                L.append(f"| {c.name} | {math.degrees(c.angle):.1f} | continuous kerb | – | – | – | – | – | – |")
+                continue
+            g = c.group
+            L.append(f"| {c.name} | {math.degrees(c.angle):.1f} | {g.kind} | {', '.join(f'{r:.1f}' for r in g.radii)} | "
+                     f"{g.t_in:.2f} | {g.t_out:.2f} | {g.length:.2f} | {c.pi[0]:.3f} | {c.pi[1]:.3f} |")
+    if d.triangles:
+        L += ["", "## 4. Sight triangles", "", "| Approaches | Distances (m) | Obstructions |", "|---|---|---|"]
+        L += [f"| {t.name} | {t.distances[0]:.1f} × {t.distances[1]:.1f} | {', '.join(t.obstructions) or 'none'} |" for t in d.triangles]
+    if d.roundabout:
+        rb = d.roundabout
+        L += ["", "## 5. Roundabout", "",
+              f"- Central island radius {rb['central_island_radius_m']:.1f} m; circulatory width {rb['circulatory_width_m']:.1f} m; "
+              f"inscribed circle diameter {rb['inscribed_diameter_m']:.1f} m.",
+              f"- Entry kerb radius {rb['entry_radius_m']:.1f} m; exit kerb radius {rb['exit_radius_m']:.1f} m ({rb['setting']}).",
+              "- Weaving length is measured along the inscribed circle from the end of one arm's entry kerb to the start "
+              "of the next arm's exit kerb (clockwise circulation).", "",
+              "| Weaving section | Length (m) | Width (m) | Capacity (PCU/h) |", "|---|---|---|---|"]
+        L += [f"| {w['section']} | {w['length_m']:.1f} | {w['width_m']:.1f} | "
+              f"{w['capacity_pcu_h']:.0f} |" if 'capacity_pcu_h' in w else
+              f"| {w['section']} | {w['length_m']:.1f} | {w['width_m']:.1f} | – (no flows given) |" for w in rb["weaving"]]
+    if d.notes:
+        L += ["", "Notes:"] + [f"- {n}" for n in d.notes]
+    L += ["", "## Checks not passed", ""] + _failed(d.checks)
     L += ["", "## Review and approval", "", "| Role | Name / designation | Decision | Date |", "|---|---|---|---|",
           "| Designed by | | | |", "| Checked by | | | |", "| Approved by | | | |", ""]
     return "\n".join(L)

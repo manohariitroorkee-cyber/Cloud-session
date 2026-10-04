@@ -11,9 +11,24 @@ import numpy as np
 
 @dataclass
 class VIP:
+    """Vertical intersection point.  Symmetric curve: curve_length = total length.
+    Unsymmetrical curve: curve_length = length BEFORE the VIP and l2 = length AFTER it."""
     chainage: float
     level: float
     curve_length: float = 0.0
+    l2: float | None = None
+
+    @property
+    def la(self) -> float:
+        return self.curve_length / 2 if self.l2 is None else self.curve_length
+
+    @property
+    def lb(self) -> float:
+        return self.curve_length / 2 if self.l2 is None else self.l2
+
+    @property
+    def total(self) -> float:
+        return self.la + self.lb
 
 
 @dataclass
@@ -29,9 +44,9 @@ class VerticalAlignment:
             if b.chainage <= a.chainage:
                 self.errors.append(f"VIPs must increase in chainage ({a.chainage} → {b.chainage}).")
         for i in range(1, len(v) - 1):
-            lo = v[i].chainage - v[i].curve_length / 2
-            hi = v[i].chainage + v[i].curve_length / 2
-            prev_end = v[i - 1].chainage + v[i - 1].curve_length / 2
+            lo = v[i].chainage - v[i].la
+            hi = v[i].chainage + v[i].lb
+            prev_end = v[i - 1].chainage + (v[i - 1].lb if i - 1 > 0 else 0)
             if lo < prev_end - 1e-9:
                 self.errors.append(f"Vertical curve at ch {v[i].chainage:.1f} overlaps the previous curve.")
             if i == len(v) - 2 and hi > v[-1].chainage + 1e-9:
@@ -42,14 +57,21 @@ class VerticalAlignment:
         return (b.level - a.level) / (b.chainage - a.chainage)
 
     def level(self, ch: float) -> float:
+        """Symmetric or unsymmetrical parabolic curves.  With La, Lb the lengths
+        before/after the VIP and A = g2 − g1, the middle ordinate at the VIP is
+        e = A·La·Lb / (2(La+Lb)); the offset from the tangent is e·(x/La)² on the
+        first part (x from BVC) and e·(x'/Lb)² on the second (x' from EVC)."""
         v = self.vips
         for i in range(1, len(v) - 1):
-            L = v[i].curve_length
-            if L > 0 and v[i].chainage - L / 2 <= ch <= v[i].chainage + L / 2:
+            la, lb = v[i].la, v[i].lb
+            if la + lb > 0 and v[i].chainage - la <= ch <= v[i].chainage + lb:
                 g1, g2 = self.grade(i - 1), self.grade(i)
-                x = ch - (v[i].chainage - L / 2)
-                z0 = v[i].level - g1 * L / 2
-                return z0 + g1 * x + (g2 - g1) / (2 * L) * x * x
+                e = (g2 - g1) * la * lb / (2 * (la + lb))
+                if ch <= v[i].chainage:
+                    x = ch - (v[i].chainage - la)
+                    return v[i].level + g1 * (ch - v[i].chainage) + (e * (x / la) ** 2 if la > 0 else 0.0)
+                x = (v[i].chainage + lb) - ch
+                return v[i].level + g2 * (ch - v[i].chainage) + (e * (x / lb) ** 2 if lb > 0 else 0.0)
         for i in range(len(v) - 1):
             if ch <= v[i + 1].chainage or i == len(v) - 2:
                 return v[i].level + self.grade(i) * (ch - v[i].chainage)
@@ -60,7 +82,7 @@ class VerticalAlignment:
         out = []
         for i in range(1, len(self.vips) - 1):
             g1, g2 = self.grade(i - 1), self.grade(i)
-            out.append((i, g1, g2, self.vips[i].curve_length, "crest" if g2 < g1 else "sag"))
+            out.append((i, g1, g2, self.vips[i].total, "crest" if g2 < g1 else "sag"))
         return out
 
 

@@ -1,0 +1,70 @@
+# Junction geometric design parameters.  Code-derived values are transcribed from
+# secondary statements of IRC:SP:41 (at-grade intersections) and IRC:65
+# (roundabouts / traffic rotaries) and are NOT verified against the printed codes.
+id: junction_design
+title: Junction geometric design (IRC:SP:41, IRC:65) and project decisions
+source_document: IRC:SP:41 / IRC:65
+
+parameters:
+  corner_radius_by_vehicle:
+    value: {car: 6, bus: 12, truck: 15, semi_trailer: 18}
+    unit: m
+    description: Minimum kerb return radius at intersection corners by design vehicle
+    source: {document: "Project design basis", note: "Confirm with IRC:SP:41 and a swept-path check for the design vehicle"}
+    verification: project_decision
+
+  min_intersection_angle_deg:
+    value: 60
+    unit: "°"
+    description: Smallest acceptable angle at which a minor road meets the major road (90° preferred)
+    source: {document: "IRC:SP:41", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  minor_road_setback_m:
+    value: 4.5
+    unit: m
+    description: Priority junction – minor-road driver eye set-back from the major-road conflict point
+    source: {document: "Project design basis", note: "Confirm against IRC:SP:41"}
+    verification: project_decision
+
+  major_road_visibility_time_s:
+    value: 7.5
+    unit: s
+    description: Priority junction – visibility along the major road expressed as travel time at major-road speed
+    source: {document: "Project design basis", note: "Confirm against IRC:SP:41"}
+    verification: project_decision
+
+  roundabout_entry_radius_range_m:
+    value: {urban: [15, 25], rural: [20, 35]}
+    unit: m
+    description: Recommended entry kerb radius range
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  roundabout_exit_to_entry_ratio_min:
+    value: 1.0
+    unit: "-"
+    description: Exit kerb radius not smaller than this multiple of the entry radius
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  roundabout_central_island_to_entry_ratio:
+    value: 1.33
+    unit: "-"
+    description: Central island radius as a multiple of the entry radius
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  weaving_length_to_width_min:
+    value: 4
+    unit: "-"
+    description: Minimum weaving length as a multiple of weaving width
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  wardrop_coefficient:
+    value: 280
+    unit: "-"
+    description: Coefficient in the Wardrop weaving-section capacity formula Qp = 280·w(1+e/w)(1−p/3)/(1+w/l)
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification
