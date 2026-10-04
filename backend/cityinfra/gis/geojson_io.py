@@ -18,7 +18,7 @@ from typing import Any
 from ..model.core import EngineeringObject, ObjectKind, Project, RelationType
 from .geometry import looks_geographic, require_projected
 
-RESERVED = {"kind", "name", "status", "attributes", "from", "to", "id"}
+RESERVED = {"kind", "name", "status", "attributes", "from", "to", "id", "drains_to"}
 IMPORT_STATUSES = {"existing", "proposed"}      # checked / approved can only be set by a review record
 GEOGRAPHIC_NAMES = ("CRS84", "EPSG::4326", "EPSG:4326", "OGC:1.3")
 
@@ -56,6 +56,7 @@ def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str
                         "reproject the data before import.")
         return problems
     links: list[tuple[EngineeringObject, str | None, str | None]] = []
+    drains: list[tuple[EngineeringObject, str]] = []
     for i, f in enumerate(feats):
         props = dict(f.get("properties") or {})
         try:
@@ -79,12 +80,19 @@ def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str
         pr.add(obj)
         if props.get("from") or props.get("to"):
             links.append((obj, props.get("from"), props.get("to")))
+        if props.get("drains_to"):
+            drains.append((obj, props["drains_to"]))
     for obj, a, b in links:
         for name, rel in ((a, RelationType.UPSTREAM_NODE), (b, RelationType.DOWNSTREAM_NODE)):
             try:
                 pr.relate(obj, pr.by_name(name), rel)
             except KeyError:
                 problems.append(f"{obj.label}: node '{name}' not found")
+    for obj, name in drains:
+        try:
+            pr.relate(obj, pr.by_name(name), RelationType.DRAINS_TO)
+        except KeyError:
+            problems.append(f"{obj.label}: drain point '{name}' not found")
     return problems
 
 
@@ -99,6 +107,8 @@ def export_feature_collection(pr: Project, results: dict[str, dict[str, Any]] | 
                 props["from"] = pr.objects[r.target_id].name
             if r.source_id == o.id and r.type == RelationType.DOWNSTREAM_NODE:
                 props["to"] = pr.objects[r.target_id].name
+            if r.source_id == o.id and r.type == RelationType.DRAINS_TO:
+                props["drains_to"] = pr.objects[r.target_id].name
         if results and o.id in results:
             props["results"] = results[o.id]
         feats.append({"type": "Feature", "geometry": o.geometry, "properties": props})

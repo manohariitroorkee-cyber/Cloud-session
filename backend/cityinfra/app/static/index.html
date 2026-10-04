@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City Infrastructure Designer</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button class="brand" id="go-home" data-help="Go back to the start page to choose something else to design.">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="6" fill="var(--sign)"/>
+        <path d="M9 22h14M9 16h14M9 10h8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>City Infrastructure Designer</span>
+    </button>
+    <div class="top-module" id="top-module"></div>
+    <nav class="top-actions" id="top-actions" hidden>
+      <button id="btn-example" class="btn" data-help="Replace the drawing with a ready-made example, so you can see how it works.">Load example</button>
+      <button id="btn-clear" class="btn" data-help="Clear the drawing and start your own from an empty sheet. Undo brings it back.">Start fresh</button>
+      <button id="btn-open" class="btn" data-help="Open a drawing you saved earlier (.geojson file).">Open saved work</button>
+      <input id="file-open" type="file" accept=".geojson,.json,application/geo+json" hidden>
+      <button id="btn-save" class="btn" data-help="Save your drawing to a file on this computer, to open again later.">Save my work</button>
+      <button id="btn-check" class="btn primary" data-help="Check the whole design against the engineering rules and show what is OK and what needs fixing.">Check my design</button>
+    </nav>
+    <button id="btn-help" class="btn ghost" data-help="Open the guide: how to use this program, step by step, and what every button does." aria-keyshortcuts="F1">Help</button>
+  </header>
+
+  <p class="disclaimer" data-help="This program helps you prepare and check a design. A qualified engineer must review and approve it before use.">
+    Results are calculations to help an engineer. They are not an approved design.</p>
+
+  <!-- start page -->
+  <main id="home" class="home">
+    <h1>What do you want to design?</h1>
+    <p class="lead">Pick one. You can start from a ready-made example and change it, or draw your own on an empty sheet. Every button explains itself when you point at it.</p>
+    <div class="tiles" id="tiles"></div>
+    <section class="how">
+      <h2>How it works</h2>
+      <ol>
+        <li><b>Draw</b> – place points and join them, or draw the road, on the sheet.</li>
+        <li><b>Fill in</b> – a few simple details. Suggested values are filled in and marked so you can check them.</li>
+        <li><b>Check</b> – press <i>Check my design</i>. Green is fine, amber needs a look, red needs fixing, with advice on what to change.</li>
+        <li><b>Share</b> – download the report for the engineer.</li>
+      </ol>
+    </section>
+  </main>
+
+  <!-- workspace -->
+  <main id="work" class="work" hidden>
+    <aside class="tools" id="tools" aria-label="Drawing tools"></aside>
+    <section class="sheet" aria-label="Drawing">
+      <svg id="canvas" role="application" aria-label="Drawing sheet" data-help="The drawing sheet. Drag empty space to move around, use the mouse wheel to zoom, click an item to see its details."></svg>
+      <div class="hint" id="hint" role="status"></div>
+      <div class="sheet-ctl">
+        <button id="zoom-in" class="icon" aria-label="Zoom in" data-help="Make the drawing bigger.">+</button>
+        <button id="zoom-out" class="icon" aria-label="Zoom out" data-help="Make the drawing smaller.">−</button>
+        <button id="zoom-fit" class="icon wide" data-help="Show the whole drawing.">Fit</button>
+      </div>
+      <div class="scale" id="scale" aria-hidden="true"></div>
+    </section>
+    <aside class="side" id="side" aria-label="Guide and details"></aside>
+  </main>
+
+  <section id="results" class="results" hidden aria-label="Check results"></section>
+  <div class="status-line" id="status-line" aria-live="polite"></div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

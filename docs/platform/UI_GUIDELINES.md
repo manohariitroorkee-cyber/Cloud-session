@@ -24,6 +24,7 @@ the command line, and the GIS frontend still to be built).
 |---|---|---|
 | Network Designer (`index.html`) | `web-src/help.js` (`HELP` for controls, `FIELDS` for properties fields) | `NODE_PATH=$(npm root -g) node web-src/check-help.cjs` – opens the page in Chromium, walks through every state (each item type selected, after a run, export dialog, confirmation, guide) and lists any control without help |
 | Command line (`cityinfra`) | `argparse` help on every option, with examples (`cityinfra -h`) | `backend/tests/test_cli_help.py` |
+| City Infrastructure Designer (`backend/cityinfra/app/`) | the `data-help` attribute on each control (fields carry it on their label); the Help guide is built from those attributes, and every check's plain wording and advice live in `plain.py` | `backend/ui_audit/check_app.py` – walks every module (empty sheet, each tool, example, missing-details list, results, every kind of object selected, guide) at desktop and phone width; `backend/tests/test_app.py` – every check has wording and advice, every button in `app.js` has `data-help` |
 | GIS frontend (to be built) | same pattern: one registry module | same audit approach, run in CI |
 
 ## Adding a new control

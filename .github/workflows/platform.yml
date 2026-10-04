@@ -2,7 +2,7 @@ name: platform
 
 on:
   push:
-    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html", ".github/workflows/platform.yml"]
+    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html", "start-app.*", ".github/workflows/platform.yml"]
   pull_request:
     paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html"]
 
@@ -45,3 +45,21 @@ jobs:
         run: npm install -g playwright@1.56.0 && npx playwright install --with-deps chromium
       - name: Audit help coverage
         run: NODE_PATH=$(npm root -g) node web-src/check-help.cjs index.html
+
+  app-ui:
+    # The simple app: every state of every module in a real browser, with help coverage and no console errors.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build engines (EPANET from this repo, SWMM from USEPA v5.2.4)
+        run: engines/build_engines.sh
+      - name: Install backend and Playwright
+        run: pip install -e backend playwright && python -m playwright install --with-deps chromium
+      - name: Walk through the app
+        working-directory: backend
+        run: python ui_audit/check_app.py screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: app-screenshots, path: backend/screenshots }

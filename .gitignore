@@ -241,3 +241,6 @@ engines/.build/
 __pycache__/
 *.pyc
 .venv/
+
+# City Infrastructure Designer UI audit output
+backend/screenshots/

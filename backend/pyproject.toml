@@ -11,9 +11,10 @@ api = ["fastapi>=0.110", "uvicorn>=0.29", "psycopg[binary]>=3.1", "pyproj>=3.6",
 
 [project.scripts]
 cityinfra = "cityinfra.cli:main"
+cityinfra-app = "cityinfra.app.server:main"
 
 [tool.setuptools.packages.find]
 include = ["cityinfra*"]
 
 [tool.setuptools.package-data]
-cityinfra = ["rules/rulesets/*.yaml"]
+cityinfra = ["rules/rulesets/*.yaml", "app/static/*"]

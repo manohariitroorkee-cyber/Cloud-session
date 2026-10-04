@@ -847,6 +847,17 @@ def fit_drawn(points: list[tuple[float, float]], straight_radius_m: float = 2000
             specs[i]["R"], specs[i + 1]["R"] = round(ri * lo, 1) - 0.05, round(rj * lo, 1) - 0.05
             specs[i]["R"], specs[i + 1]["R"] = round(specs[i]["R"], 1), round(specs[i + 1]["R"], 1)
             notes.append(f"Curves at PI{i} and PI{i+1} reduced together to meet on their common tangent.")
+    # a curve at either end of the drawing must also fit between the end point and its PI
+    for j, which, other in ((1, "in", 0), (len(pis) - 2, "out", len(pis) - 1)):
+        if j not in specs or _t_other(pis, specs, j, which) <= math.dist(pis[j], pis[other]):
+            continue
+        r0, lo, hi = specs[j]["R"], 0.01, 1.0
+        for _ in range(50):
+            mid = (lo + hi) / 2
+            specs[j]["R"] = r0 * mid
+            lo, hi = (mid, hi) if _t_other(pis, specs, j, which) <= math.dist(pis[j], pis[other]) else (lo, mid)
+        specs[j]["R"] = math.floor(r0 * lo * 10) / 10
+        notes.append(f"Curve at PI{j} reduced to {specs[j]['R']} m so it ends within the drawn line.")
     al = from_pis(pis, specs)
     dev = []
     if not al.errors:

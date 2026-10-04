@@ -10,10 +10,22 @@ engines/build_engines.sh                  # from repo root: builds libepanet2 (t
 cd backend
 python -m venv .venv && . .venv/bin/activate
 pip install -e .
-python -m unittest discover -s tests -t .   # 117 tests; engine tests skip if libraries are absent
+python -m unittest discover -s tests -t .   # 135 tests; engine tests skip if libraries are absent
 ```
 
-## Try it
+## The simple app (for non-specialists)
+
+```bash
+python -m cityinfra.app            # opens http://127.0.0.1:8765 – or double-click start-app.bat / start-app.sh
+python ui_audit/check_app.py out/  # browser walk-through of every module (needs: pip install playwright)
+```
+
+Draw on a sheet, fill in a few plain fields (suggested values are marked), press *Check my design*,
+and read the results as traffic lights with advice. How to use it: `../docs/platform/USER_GUIDE.md`.
+Code: `cityinfra/app/` – `api.py` (checks → plain results), `plain.py` (wording and advice for every
+check), `server.py` (standard-library HTTP server on 127.0.0.1), `static/` (page, no build step).
+
+## Try it from the command line
 
 ```bash
 python -m cityinfra.cli sewer --sample -o sewer_report.md   # synthetic network: design sheet + SWMM
