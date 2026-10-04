@@ -1,0 +1,105 @@
+# CPHEEO Manual on Sewerage and Sewage Treatment Systems (2013), Part A – Engineering.
+#
+# EVERY value below is marked requires_verification.  The values were
+# transcribed from secondary excerpts while building the software, NOT read
+# from the printed manual.  An engineer must check each one against the
+# primary text and change `verification` to `verified` with `verified_by`.
+# Until then, reports print these parameters in an "unverified criteria" list.
+#
+# Tables are step tables: [[upper_bound, value], ...]; null = no upper bound.
+
+id: cpheeo_sewerage_2013
+title: CPHEEO Manual on Sewerage and Sewage Treatment Systems, 2013 (Part A)
+source_document: CPHEEO Manual on Sewerage and Sewage Treatment Systems 2013, Part A
+
+parameters:
+  design_period_years:
+    value: 30
+    unit: years
+    description: Planning/design period for the sewer network
+    source: {clause: "Ch. 3, cl. 3.20.1 / Table 2-1"}
+    verification: requires_verification
+
+  min_sewage_lpcd:
+    value: 100
+    unit: L/capita/day
+    description: Minimum per-capita sewage flow for design of conventional sewers
+    source: {clause: "Ch. 3, cl. 3.5"}
+    verification: requires_verification
+
+  sewage_return_factor:
+    value: 0.80
+    unit: fraction
+    description: Fraction of per-capita water supply reaching the sewers
+    source: {clause: "Ch. 3 (clause not confirmed)", note: "Value as quoted in NCRPB ADB-TA 7055 design criteria summary of the CPHEEO manual"}
+    verification: requires_verification
+
+  peak_factor:
+    value: [[20000, 3.00], [50000, 2.50], [750000, 2.25], [null, 2.00]]
+    unit: "-"
+    description: Peak factor on average sewage flow vs. contributory population (step table)
+    source: {clause: "Ch. 3, Table 3.2", note: "Table values NOT seen in the excerpts consulted; entered from general knowledge of the manual – verify every row"}
+    verification: requires_verification
+
+  infiltration_fraction:
+    value: 0.10
+    unit: fraction of design sewage flow
+    description: Ground-water infiltration allowance (the manual states this as a maximum)
+    source: {clause: "Ch. 3, cl. 3.6, Table 3.3"}
+    verification: requires_verification
+
+  min_velocity_present_peak:
+    value: 0.6
+    unit: m/s
+    description: Minimum (self-cleansing) velocity at present peak flow
+    source: {clause: "Ch. 3, cl. 3.15 / Table 3.9", note: "0.6/0.8 m/s as quoted in NCRPB summary; the 2013 manual also gives a Shields-formula basis (Table 3.9)"}
+    verification: requires_verification
+
+  min_velocity_design_peak:
+    value: 0.8
+    unit: m/s
+    description: Minimum (self-cleansing) velocity at ultimate design peak flow
+    source: {clause: "Ch. 3, cl. 3.15 / Table 3.9", note: "As quoted in NCRPB summary"}
+    verification: requires_verification
+
+  max_velocity:
+    value: 3.0
+    unit: m/s
+    description: Maximum velocity (erosion limit)
+    source: {clause: "Ch. 3, cl. 3.15.3"}
+    verification: requires_verification
+
+  max_depth_ratio:
+    value: 0.8
+    unit: d/D
+    description: Maximum depth of flow / diameter at ultimate peak flow
+    source: {clause: "Ch. 3, cl. 3.15.5"}
+    verification: requires_verification
+
+  min_diameter_mm:
+    value: [[100000, 150], [null, 200]]
+    unit: mm
+    description: Minimum sewer diameter vs. town population (150 mm up to 1 lakh, 200 mm above)
+    source: {clause: "Ch. 3, cl. 3.14"}
+    verification: requires_verification
+
+  manning_n:
+    value: {plastic: 0.011, hdpe: 0.011, upvc: 0.011, di_unlined: 0.015, ci_unlined: 0.015, rcc: 0.013, stoneware: 0.013}
+    unit: s/m^(1/3)
+    description: Manning's roughness by pipe material
+    source: {clause: "Ch. 3, Table 3.11", note: "0.011 plastics and 0.015 unlined metallic seen in excerpt; RCC and stoneware 0.013 NOT seen – verify"}
+    verification: requires_verification
+
+  min_cover_m:
+    value: 1.0
+    unit: m
+    description: Minimum earth cover over the pipe crown at the start of a sanitary sewer
+    source: {clause: "Ch. 3, cl. 3.20.3"}
+    verification: requires_verification
+
+  max_manhole_spacing_m:
+    value: [[900, 30], [1500, 150], [2000, 200], [null, 300]]
+    unit: m
+    description: Maximum manhole spacing vs. sewer diameter (mm) (step table)
+    source: {clause: "Not confirmed", note: "Values from NCRPB summary; edition (1993/2013) not stated – verify against the 2013 manual"}
+    verification: requires_verification

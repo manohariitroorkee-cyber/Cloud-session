@@ -234,3 +234,10 @@ buildprod*/
 
 # git merge
 *.orig
+
+# City infrastructure platform
+engines/lib/
+engines/.build/
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,34 @@
+# Project-level adopted values that are design decisions, not code limits.
+# Edit per project; each must be confirmed by the project engineer.
+id: dda_project_defaults
+title: Project design decisions (defaults – confirm per project)
+source_document: Project design basis report
+
+parameters:
+  water_supply_lpcd:
+    value: 150
+    unit: L/capita/day
+    description: Per-capita water supply adopted for the project (sets sewage flow)
+    source: {clause: "Design basis", note: "Placeholder default – set from the project design basis"}
+    verification: project_decision
+
+  town_population:
+    value: 100000
+    unit: persons
+    description: Population of the town/scheme used to select the minimum sewer diameter
+    source: {clause: "Design basis"}
+    verification: project_decision
+
+  commercial_diameters_mm:
+    value: [150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000, 1100, 1200]
+    unit: mm
+    description: Pipe diameters available for sizing alternatives
+    source: {clause: "Design basis", note: "Match to the pipe specification (IS 14333 HDPE, IS 458 RCC etc.) adopted for the work"}
+    verification: project_decision
+
+  swmm_simulation_hours:
+    value: 6
+    unit: h
+    description: Duration of the constant-peak-inflow SWMM run used to reach steady state
+    source: {clause: "Modelling decision"}
+    verification: project_decision

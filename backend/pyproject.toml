@@ -1,0 +1,19 @@
+[project]
+name = "cityinfra"
+version = "0.1.0"
+description = "City infrastructure engineering platform – engineering model, design rules and engine adapters"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6"]
+
+[project.optional-dependencies]
+# stage 2 (API, database, GIS import) – not needed for the stage-1 core and tests
+api = ["fastapi>=0.110", "uvicorn>=0.29", "psycopg[binary]>=3.1", "pyproj>=3.6", "pyogrio>=0.7", "ezdxf>=1.2"]
+
+[project.scripts]
+cityinfra = "cityinfra.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cityinfra*"]
+
+[tool.setuptools.package-data]
+cityinfra = ["rules/rulesets/*.yaml"]

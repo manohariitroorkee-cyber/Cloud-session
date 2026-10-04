@@ -1,0 +1,13 @@
+# CPHEEO Manual on Water Supply and Treatment.  All values require
+# verification against the primary text before use.
+id: cpheeo_water_supply
+title: CPHEEO Manual on Water Supply and Treatment
+source_document: CPHEEO Manual on Water Supply and Treatment
+
+parameters:
+  min_residual_pressure_m:
+    value: [[1, 7], [2, 12], [3, 17], [null, 22]]
+    unit: m
+    description: Minimum residual pressure at the ferrule vs. number of storeys served directly
+    source: {clause: "Distribution system chapter (clause not confirmed)", note: "Entered from general knowledge – verify edition and clause"}
+    verification: requires_verification
