@@ -1,0 +1,33 @@
+{
+  // Press F5 (Run > Start Debugging) and pick one of these.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "City Infrastructure Designer (opens the browser)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cityinfra.app",
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Command line: drainage sample report",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cityinfra.cli",
+      "args": ["drainage", "--sample", "-o", "drainage_report.md"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "All tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": ["discover", "-s", "tests", "-t", ".", "-v"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal"
+    }
+  ]
+}

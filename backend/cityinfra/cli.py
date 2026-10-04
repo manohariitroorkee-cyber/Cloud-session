@@ -32,7 +32,7 @@ def _project(args) -> Project:
                 "road": sample_road_project, "electrical": sample_electrical_project,
                 "junction": sample_junction_project}[args.cmd]()
     pr = Project(Path(args.file).stem, args.epsg)
-    problems = import_feature_collection(pr, json.loads(Path(args.file).read_text()))
+    problems = import_feature_collection(pr, json.loads(Path(args.file).read_text(encoding="utf-8")))
     if problems:
         sys.exit("Import problems:\n" + "\n".join(problems))
     return pr
@@ -98,7 +98,7 @@ def main(argv=None) -> int:
         from .engineering.drainage.rainfall import IDF
         from .reports.design_reports import drainage as drainage_report
         if args.idf:
-            idf = IDF(json.loads(Path(args.idf).read_text()))
+            idf = IDF(json.loads(Path(args.idf).read_text(encoding="utf-8")))
         elif args.sample:
             from .samples import SYNTHETIC_IDF
             idf = IDF(SYNTHETIC_IDF)

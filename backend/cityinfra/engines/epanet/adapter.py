@@ -196,7 +196,7 @@ def run_water(pr: Project, duration_h: float = 0, hyd_step_min: int = 60) -> Epa
 
     with tempfile.TemporaryDirectory(prefix="epanet-") as tmp:
         f_inp, f_rpt = Path(tmp) / "model.inp", Path(tmp) / "model.rpt"
-        f_inp.write_text(inp)
+        f_inp.write_text(inp, encoding="utf-8")
         try:
             check(lib.EN_open(ph, str(f_inp).encode(), str(f_rpt).encode(), b""))
             opened = True

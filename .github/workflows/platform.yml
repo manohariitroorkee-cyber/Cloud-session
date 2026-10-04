@@ -2,7 +2,7 @@ name: platform
 
 on:
   push:
-    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html", "start-app.*", ".github/workflows/platform.yml"]
+    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html", "start-app.*", "Dockerfile", ".github/workflows/platform.yml"]
   pull_request:
     paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html"]
 
@@ -63,3 +63,35 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: app-screenshots, path: backend/screenshots }
+
+  windows:
+    # Same tests on Windows, with the engines built by MSVC; the DLLs are kept as an artifact.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build engines (epanet2.dll, swmm5.dll)
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File engines/build_engines.ps1
+      - name: Install backend
+        run: pip install -e backend
+      - name: Unit and engine tests
+        working-directory: backend
+        run: python -m unittest discover -s tests -t . -v
+      - uses: actions/upload-artifact@v4
+        with: { name: engines-windows, path: engines/lib }
+
+  docker:
+    # The web-service image builds and answers.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t cityinfra .
+      - name: Start and ask for a check
+        run: |
+          docker run -d -p 8765:8765 --name app cityinfra
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/api/modules >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8765/api/example/drainage -o ex.json
+          curl -sf -X POST -H 'Content-Type: application/json' --data @ex.json http://127.0.0.1:8765/api/check/drainage | head -c 300

@@ -68,7 +68,7 @@ def run_swmm(inp: str, nodes: list[str], links: list[str], subcatchments: list[s
     L = lib()
     with SWMM_LOCK, tempfile.TemporaryDirectory(prefix="swmm-") as tmp:
         f_inp, f_rpt, f_out = (str(Path(tmp) / n) for n in ("model.inp", "model.rpt", "model.out"))
-        Path(f_inp).write_text(inp)
+        Path(f_inp).write_text(inp, encoding="utf-8")
         raw = RawRun(EngineRun("EPA SWMM", engine_version(), "ok", inp, messages=list(notes or [])))
 
         def fail(code: int) -> None:

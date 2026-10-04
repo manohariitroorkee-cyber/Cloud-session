@@ -1,0 +1,5 @@
+.git
+engines/.build
+engines/lib
+**/__pycache__
+backend/screenshots

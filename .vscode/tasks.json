@@ -1,0 +1,46 @@
+{
+  // Terminal > Run Task… and pick one of these.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. Install (first time only)",
+      "type": "shell",
+      "command": "python -m pip install -e backend",
+      "windows": { "command": "py -3 -m pip install -e backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "2. Start the app",
+      "type": "shell",
+      "command": "python -m cityinfra.app",
+      "windows": { "command": "py -3 -m cityinfra.app" },
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "3. Run all tests",
+      "type": "shell",
+      "command": "python -m unittest discover -s tests -t .",
+      "windows": { "command": "py -3 -m unittest discover -s tests -t ." },
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "4. Build the calculation engines (SWMM, EPANET)",
+      "type": "shell",
+      "command": "engines/build_engines.sh",
+      "windows": { "command": "powershell -ExecutionPolicy Bypass -File engines/build_engines.ps1" },
+      "problemMatcher": []
+    },
+    {
+      "label": "5. Browser check of every screen (needs: pip install playwright; python -m playwright install chromium)",
+      "type": "shell",
+      "command": "python ui_audit/check_app.py screenshots",
+      "windows": { "command": "py -3 ui_audit/check_app.py screenshots" },
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -20,7 +20,7 @@ WORDED_WHERE_MADE = {"simulation_flooding", "simulation_surcharge", "level_impac
 def source_check_names() -> set[str]:
     names = set()
     for f in (PKG / "engineering").rglob("*.py"):
-        names |= set(re.findall(r'CheckResult\(\s*"(\w+)"', f.read_text()))
+        names |= set(re.findall(r'CheckResult\(\s*"(\w+)"', f.read_text(encoding="utf-8")))
     return names
 
 
@@ -166,10 +166,10 @@ class ServerTests(unittest.TestCase):
 class PageHelpTests(unittest.TestCase):
     def test_every_control_explains_itself(self):
         static = PKG / "app" / "static"
-        for tag in re.findall(r"<(?:button|select|input)\b[^>]*>", (static / "index.html").read_text()):
+        for tag in re.findall(r"<(?:button|select|input)\b[^>]*>", (static / "index.html").read_text(encoding="utf-8")):
             if 'type="file"' not in tag:
                 self.assertIn("data-help=", tag)
-        js = (static / "app.js").read_text()
+        js = (static / "app.js").read_text(encoding="utf-8")
         starts = [m.end() for m in re.finditer(r"h\('button', \{", js)]
         self.assertGreater(len(starts), 15)
         for k in starts:                      # the button's own attributes run until the next element is made

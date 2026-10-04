@@ -10,7 +10,7 @@ Serves the page from ./static and a small JSON API:
     POST /api/check/<module>       {features, settings, name} → plain-language results
     POST /api/design/drainage      {features, settings} → proposed sizes and levels for the new drains
     POST /api/report               {markdown, title} → printable HTML report
-It listens on this computer only (127.0.0.1).
+It listens on this computer only (127.0.0.1) unless --host is given.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
 import threading
 import traceback
 import webbrowser
@@ -28,6 +29,9 @@ from . import api
 from .plain import report_page
 
 STATIC = Path(__file__).parent / "static"
+# Windows can map .js/.css to the wrong type from its registry; browsers then refuse to run the page
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -96,9 +100,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": f"The program hit an internal error: {e}"}, 500)
 
 
-def serve(port: int = 8765, open_browser: bool = True) -> ThreadingHTTPServer:
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+def serve(port: int = 8765, open_browser: bool = True, host: str = "127.0.0.1") -> ThreadingHTTPServer:
+    httpd = ThreadingHTTPServer((host, port), Handler)
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '') else host}:{httpd.server_address[1]}/"
     print(f"City Infrastructure Designer is running at {url}\nKeep this window open while you work. "
           "Close it (or press Ctrl+C) to stop.")
     if open_browser:
@@ -108,10 +112,16 @@ def serve(port: int = 8765, open_browser: bool = True) -> ThreadingHTTPServer:
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="cityinfra.app", description="Start the City Infrastructure Designer in your browser.")
-    ap.add_argument("--port", type=int, default=8765, help="port on this computer (default 8765)")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8765)),
+                    help="port (default 8765, or the PORT environment variable set by a hosting service)")
     ap.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="address to listen on (default 127.0.0.1 = this computer only). Use 0.0.0.0 only on a "
+                         "server behind the office network or a login-protected reverse proxy: the app has no login")
     a = ap.parse_args(argv)
-    httpd = serve(a.port, not a.no_browser)
+    if a.host not in ("127.0.0.1", "localhost"):
+        print(f"WARNING: listening on {a.host} – anyone who can reach this address can use the app (it has no login).")
+    httpd = serve(a.port, not a.no_browser, a.host)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
