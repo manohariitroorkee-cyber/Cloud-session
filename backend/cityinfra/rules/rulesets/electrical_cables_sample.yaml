@@ -1,0 +1,41 @@
+# SAMPLE CABLE LIBRARY – ILLUSTRATIVE VALUES ONLY.
+#
+# The resistance, reactance and current-rating figures below are of typical
+# magnitude for XLPE aluminium cables but are NOT taken from any manufacturer's
+# datasheet or Indian Standard.  Before any design use, replace every entry with
+# the approved manufacturer's datasheet values (AC resistance at maximum
+# conductor temperature, reactance at 50 Hz, current rating for the laying
+# condition) and record the source here.
+#
+# r_ohm_km: AC resistance per km (one conductor, at operating temperature)
+# x_ohm_km: reactance per km at 50 Hz
+# rating_a: continuous current rating, laid direct in ground, before derating
+id: electrical_cables_sample
+title: Cable library (SAMPLE – replace with manufacturer datasheets)
+source_document: SAMPLE values – not from a datasheet
+
+parameters:
+  cable_library:
+    value:
+      LT-AL-3.5C-25:  {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 25,  r_ohm_km: 1.54,  x_ohm_km: 0.080, rating_a: 90,  description: "1.1 kV XLPE Al 3.5C 25 mm² armoured"}
+      LT-AL-3.5C-35:  {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 35,  r_ohm_km: 1.11,  x_ohm_km: 0.078, rating_a: 110, description: "1.1 kV XLPE Al 3.5C 35 mm² armoured"}
+      LT-AL-3.5C-50:  {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 50,  r_ohm_km: 0.822, x_ohm_km: 0.077, rating_a: 130, description: "1.1 kV XLPE Al 3.5C 50 mm² armoured"}
+      LT-AL-3.5C-70:  {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 70,  r_ohm_km: 0.568, x_ohm_km: 0.075, rating_a: 160, description: "1.1 kV XLPE Al 3.5C 70 mm² armoured"}
+      LT-AL-3.5C-95:  {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 95,  r_ohm_km: 0.411, x_ohm_km: 0.074, rating_a: 190, description: "1.1 kV XLPE Al 3.5C 95 mm² armoured"}
+      LT-AL-3.5C-120: {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 120, r_ohm_km: 0.325, x_ohm_km: 0.073, rating_a: 215, description: "1.1 kV XLPE Al 3.5C 120 mm² armoured"}
+      LT-AL-3.5C-150: {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 150, r_ohm_km: 0.265, x_ohm_km: 0.073, rating_a: 240, description: "1.1 kV XLPE Al 3.5C 150 mm² armoured"}
+      LT-AL-3.5C-185: {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 185, r_ohm_km: 0.211, x_ohm_km: 0.073, rating_a: 270, description: "1.1 kV XLPE Al 3.5C 185 mm² armoured"}
+      LT-AL-3.5C-240: {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 240, r_ohm_km: 0.161, x_ohm_km: 0.072, rating_a: 310, description: "1.1 kV XLPE Al 3.5C 240 mm² armoured"}
+      LT-AL-3.5C-300: {grade_kv: 1.1, conductor: Al, cores: 3.5, size_mm2: 300, r_ohm_km: 0.130, x_ohm_km: 0.072, rating_a: 350, description: "1.1 kV XLPE Al 3.5C 300 mm² armoured"}
+      LT-AL-2C-16:    {grade_kv: 1.1, conductor: Al, cores: 2,   size_mm2: 16,  r_ohm_km: 2.45,  x_ohm_km: 0.090, rating_a: 75,  description: "1.1 kV XLPE Al 2C 16 mm² service"}
+      LT-AL-2C-25:    {grade_kv: 1.1, conductor: Al, cores: 2,   size_mm2: 25,  r_ohm_km: 1.54,  x_ohm_km: 0.088, rating_a: 95,  description: "1.1 kV XLPE Al 2C 25 mm² service"}
+      HT-AL-3C-95:    {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 95,  r_ohm_km: 0.411, x_ohm_km: 0.110, rating_a: 200, description: "11 kV (E) XLPE Al 3C 95 mm² armoured"}
+      HT-AL-3C-120:   {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 120, r_ohm_km: 0.325, x_ohm_km: 0.105, rating_a: 225, description: "11 kV (E) XLPE Al 3C 120 mm² armoured"}
+      HT-AL-3C-150:   {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 150, r_ohm_km: 0.265, x_ohm_km: 0.103, rating_a: 255, description: "11 kV (E) XLPE Al 3C 150 mm² armoured"}
+      HT-AL-3C-185:   {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 185, r_ohm_km: 0.211, x_ohm_km: 0.100, rating_a: 285, description: "11 kV (E) XLPE Al 3C 185 mm² armoured"}
+      HT-AL-3C-240:   {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 240, r_ohm_km: 0.161, x_ohm_km: 0.098, rating_a: 330, description: "11 kV (E) XLPE Al 3C 240 mm² armoured"}
+      HT-AL-3C-300:   {grade_kv: 11,  conductor: Al, cores: 3,   size_mm2: 300, r_ohm_km: 0.130, x_ohm_km: 0.096, rating_a: 370, description: "11 kV (E) XLPE Al 3C 300 mm² armoured"}
+    unit: "-"
+    description: Cable electrical data by cable type
+    source: {clause: "SAMPLE", note: "Illustrative magnitudes only – replace with manufacturer datasheet values"}
+    verification: requires_verification

@@ -1,7 +1,7 @@
 # City Infrastructure Engineering Platform – Architecture
 
-Status: foundation, sewer (+SWMM), water (+EPANET), storm drainage (hydraulic, +SWMM) and road
-alignment/curve design implemented on branch `platform/foundation-stage1`. Pavement thickness design and
+Status: foundation, sewer (+SWMM), water (+EPANET), storm drainage (hydraulic, +SWMM), road
+alignment/curve design and electrical distribution (radial demand, loading, current, voltage drop) implemented on branch `platform/foundation-stage1`. Pavement thickness design and
 structural (RCC) design are out of scope. See `IMPLEMENTATION_PLAN.md` for what is done and what is pending.
 
 ---

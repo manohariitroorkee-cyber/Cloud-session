@@ -26,9 +26,9 @@ from .rules.framework import RuleContext, RuleSet
 def _project(args) -> Project:
     if args.sample:
         from .samples import sample_sewer_project, sample_water_project
-        from .samples import sample_drainage_project, sample_road_project
-        return {"sewer": sample_sewer_project, "water": sample_water_project,
-                "drainage": sample_drainage_project, "road": sample_road_project}[args.cmd]()
+        from .samples import sample_drainage_project, sample_electrical_project, sample_road_project
+        return {"sewer": sample_sewer_project, "water": sample_water_project, "drainage": sample_drainage_project,
+                "road": sample_road_project, "electrical": sample_electrical_project}[args.cmd]()
     pr = Project(Path(args.file).stem, args.epsg)
     problems = import_feature_collection(pr, json.loads(Path(args.file).read_text()))
     if problems:
@@ -45,11 +45,16 @@ def main(argv=None) -> int:
                "  cityinfra sewer --sample -o sewer.md        try the sewer check on the built-in example\n"
                "  cityinfra sewer mynet.geojson -o sewer.md   check your own network (GeoJSON, metres)\n"
                "  cityinfra drainage mynet.geojson --idf idf.json --return-period 5 --area-type residential\n"
-               "  cityinfra road --sample                     alignment and curve checks for the example road",
+               "  cityinfra road --sample                     alignment and curve checks for the example road\n"
+               "  cityinfra electrical mynet.geojson --cables cables.yaml -o electrical.md",
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["sewer", "water", "drainage", "road"], metavar="CHECK",
+    ap.add_argument("cmd", choices=["sewer", "water", "drainage", "road", "electrical"], metavar="CHECK",
                     help="what to check: sewer (design sheet + SWMM), water (EPANET pressures), "
-                         "drainage (Rational method + SWMM storm), road (alignment and curves)")
+                         "drainage (Rational method + SWMM storm), road (alignment and curves), "
+                         "electrical (demand, transformer loading, cable current and voltage drop)")
+    ap.add_argument("--cables", metavar="CABLES.yaml",
+                    help="electrical only: cable library from manufacturers' datasheets "
+                         "(default: the built-in SAMPLE library, illustrative values only)")
     ap.add_argument("file", nargs="?", metavar="NETWORK.geojson",
                     help="your network as a GeoJSON FeatureCollection in the project's projected CRS (metres)")
     ap.add_argument("--sample", action="store_true",
@@ -117,6 +122,14 @@ def main(argv=None) -> int:
             d = design_road(pr, r, rules)
             parts.append(road_report(pr.name, d, rules, level_impacts(pr, d) if not d.errors else [], tin))
         text = "\n\n".join(parts) or "No road alignments found."
+    elif args.cmd == "electrical":
+        from .engineering.electrical.network import analyse, build_network as build_el, schedules
+        from .reports.design_reports import electrical as electrical_report
+        cables = RuleSet.load(args.cables) if args.cables else RuleSet.load("electrical_cables_sample.yaml")
+        rules = RuleContext([cables, RuleSet.load("project_electrical_defaults.yaml")])
+        net = build_el(pr, rules)
+        res = analyse(net, rules)
+        text = electrical_report(pr.name, net, res, rules, schedules(net, res, rules) if not res.errors else {})
     else:
         from .engines.epanet.adapter import run_water
         from .engineering.water.checks import pressure_checks

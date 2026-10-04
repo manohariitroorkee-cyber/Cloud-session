@@ -169,3 +169,42 @@ def sample_road_project() -> Project:
     pr.add(EngineeringObject(ObjectKind.MANHOLE, _pt(60, 34), name="MH-R1", attributes={"ground_level": 215.70}))
     pr.add(EngineeringObject(ObjectKind.MANHOLE, _pt(100, 26), name="MH-R2", attributes={"ground_level": 216.122}))
     return pr
+
+
+def sample_electrical_project() -> Project:
+    """11 kV substation → two transformers → feeder pillars → loads.
+
+    Deliberate defects so that checks and proposals can be exercised:
+    TX2 (250 kVA) is overloaded, and cable L5 is too small and too long
+    (current and voltage drop both fail).
+    """
+    pr = Project("Synthetic sector electrical", crs_epsg=32643)
+    n = {}
+
+    def node(kind, name, x, y, **attrs):
+        n[name] = pr.add(EngineeringObject(kind, _pt(x, y), name=name, attributes=attrs))
+
+    node(ObjectKind.SUBSTATION, "SS1", 0, 0, voltage_kv=11)
+    node(ObjectKind.TRANSFORMER, "TX1", 400, 0, rating_kva=630, hv_kv=11, lv_v=433)
+    node(ObjectKind.TRANSFORMER, "TX2", 0, 300, rating_kva=250, hv_kv=11, lv_v=433)
+    node(ObjectKind.FEEDER_PILLAR, "FP1", 550, 0)
+    node(ObjectKind.FEEDER_PILLAR, "FP2", 0, 450)
+    for i, (x, y, kw) in enumerate([(650, 60, 150), (650, -60, 150), (550, 120, 120)], 1):
+        node(ObjectKind.ELECTRICAL_LOAD, f"LD{i}", x, y, connected_load_kw=kw, category="residential", power_factor=0.9)
+    node(ObjectKind.ELECTRICAL_LOAD, "SL1", 470, -40, connected_load_kw=4, category="streetlight", power_factor=0.95, phases=1)
+    node(ObjectKind.ELECTRICAL_LOAD, "LD4", 120, 450, connected_load_kw=300, category="commercial", power_factor=0.9)
+    node(ObjectKind.ELECTRICAL_LOAD, "LD5", 0, 800, connected_load_kw=180, category="residential", power_factor=0.9)
+
+    cables = [("H1", "SS1", "TX1", "HT-AL-3C-185"), ("H2", "SS1", "TX2", "HT-AL-3C-185"),
+              ("L1", "TX1", "FP1", "LT-AL-3.5C-300"), ("L2", "FP1", "LD1", "LT-AL-3.5C-95"),
+              ("L3", "FP1", "LD2", "LT-AL-3.5C-95"), ("L4", "FP1", "LD3", "LT-AL-3.5C-95"),
+              ("S1", "TX1", "SL1", "LT-AL-2C-16"),
+              ("L6", "TX2", "FP2", "LT-AL-3.5C-300"), ("L7", "FP2", "LD4", "LT-AL-3.5C-185"),
+              ("L5", "FP2", "LD5", "LT-AL-3.5C-70")]          # too small and too long
+    for name, a, b, typ in cables:
+        ga, gb = n[a].geometry["coordinates"], n[b].geometry["coordinates"]
+        c = pr.add(EngineeringObject(ObjectKind.ELECTRICAL_CABLE, {"type": "LineString", "coordinates": [ga, gb]},
+                                     name=name, attributes={"cable_type": typ, "runs": 2 if name in ("L1", "L6", "L7") else 1}))
+        pr.relate(c, n[a], RelationType.UPSTREAM_NODE)
+        pr.relate(c, n[b], RelationType.DOWNSTREAM_NODE)
+    return pr

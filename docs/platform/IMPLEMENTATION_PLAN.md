@@ -21,7 +21,7 @@ Legend: **done** = implemented and tested · **partial** = foundation in place �
 | — | Revisions: compare / rollback services | pending | schema ready; services stage 2 |
 | 11 | Storm-water drainage – hydraulic design | done | Catchments (composite C, Kirpich/inlet time), project IDF (power or table form, no default), Rational-method sheet with iterated time of concentration, circular/rectangular/trapezoidal/box sections, capacity, d/D, freeboard, velocities, return-period check, size alternatives; SWMM runoff + dynamic-wave routing with alternating-block design storm, flooding and surcharge |
 | 12 | Roads – alignment and curve design | done | Horizontal: circular curves + clothoid transitions, chainage, station/offset; checks R_min, transition length (centrifugal-acceleration and superelevation run-off). Vertical: grades, parabolic curves; checks max/min grade, curve length for SSD (crest and headlight sag). TIN ground, long-section, cross-section surface geometry, utilities whose cover level must follow the road (and change-impact links) |
-| — | Electrical (hierarchy, load, voltage drop, cable sizing) | pending | awaiting scope confirmation |
+| 13 | Electrical distribution | done | Radial substation → HT cable → transformer → LT cable → feeder pillar/pole → load; demand factors and per-level diversity (P and Q), transformer loading, cable current with derating and parallel runs, three- and single-phase voltage drop cumulative from the source bus, cable-size / transformer-rating proposals, transformer, pillar, cable and load schedules. Cable data from a library file – the shipped library is SAMPLE data. Pending: short-circuit, protection, earthing, meshed-network load flow |
 | — | PNG / gas | pending | stage 5 – candidate engine pandapipes |
 | — | Telecom / fibre (ducts, chambers, capacity) | pending | stage 5 |
 | — | Quantities / BOQ / drawings (plan, L-section, schedules, DXF/PDF) | pending | schema for quantities & rates ready |
@@ -43,6 +43,7 @@ Legend: **done** = implemented and tested · **partial** = foundation in place �
 ## Items requiring the engineer's confirmation
 
 * Every value in `cpheeo_sewerage_2013.yaml`, `cpheeo_water_supply.yaml`, `cpheeo_storm_water_2019.yaml` and `irc_geometric_design.yaml` is `requires_verification`. The storm-water and IRC values came from secondary summaries and textbook statements of the codes, and several clause numbers are unconfirmed.
+* The electrical cable library shipped (`electrical_cables_sample.yaml`) is illustrative sample data; replace it with the manufacturer's datasheet values (`cityinfra electrical … --cables your_cables.yaml`). Demand factors, diversity factors, derating, voltage-drop limits and transformer loading limit are project decisions to confirm with the distribution licensee's norms.
 * Drainage needs a project IDF relationship (IMD data or hydrology report); none is shipped. The sample IDF is synthetic. Peak-factor table (Table 3.2), Manning *n* for RCC/stoneware, manhole spacing table and the residual-pressure table were **not** seen in a primary source during development.
 * `dda_project_defaults.yaml` holds project decisions (water supply lpcd, town population, available diameters) – set per project.
 * Which DDA-specific requirements should be added as a separate rule set.

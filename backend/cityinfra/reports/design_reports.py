@@ -8,8 +8,8 @@ from ..rules.framework import CheckStatus, RuleContext
 from .sewer_report import BANNER
 
 
-def _criteria(rules: RuleContext, checks, extra: list[str]) -> list[str]:
-    ids = sorted({c.parameter.id for c in checks if c.parameter} | set(extra))
+def _criteria(rules: RuleContext, checks, extra: list[str], skip: tuple[str, ...] = ()) -> list[str]:
+    ids = sorted(({c.parameter.id for c in checks if c.parameter} | set(extra)) - set(skip))
     L = ["| Parameter | Value | Unit | Source | Status |", "|---|---|---|---|---|"]
     for pid in ids:
         p = rules.get(pid)
@@ -110,6 +110,50 @@ def road(project_name: str, d, rules: RuleContext, impacts: list[dict], tin=None
               f"{i['road_surface_level']} | {i['difference_m']:+.3f} |" for i in impacts]
     else:
         L.append("None found within the right of way.")
+    L += ["", "## Review and approval", "", "| Role | Name / designation | Decision | Date |", "|---|---|---|---|",
+          "| Designed by | | | |", "| Checked by | | | |", "| Approved by | | | |", ""]
+    return "\n".join(L)
+
+
+def electrical(project_name: str, net, res, rules: RuleContext, sched: dict) -> str:
+    L = [f"# Electrical distribution check – {project_name}", "", BANNER, "",
+         "Scope: radial HT/LT network – demand, transformer loading, cable current and voltage drop. "
+         "Short-circuit, protection discrimination and earthing are not covered.", "",
+         "## 1. Method", "", f"- {res.method}.", "",
+         "## 2. Design criteria and data used", ""] + _criteria(rules, res.checks, [
+             "demand_factors", "diversity_factors", "default_power_factor", "cable_derating_factor"],
+             skip=("cable_library",))
+    cl = rules.get("cable_library")
+    lib = cl.value
+    used = sorted({cr.cable.type for cr in res.cables.values()})
+    L += ["", f"Cable data used – source: {cl.source.cite()} ({cl.verification.value})", "",
+          "| Cable type | Description | R (Ω/km) | X (Ω/km) | Rating (A) |", "|---|---|---|---|---|"]
+    L += [f"| {t} | {lib[t].get('description', '')} | {lib[t]['r_ohm_km']} | {lib[t]['x_ohm_km']} | {lib[t]['rating_a']} |"
+          for t in used]
+    if cl.verification.value != "verified":
+        L += ["", "> The cable data is **not verified**. Replace it with the approved manufacturer's datasheet "
+                  "values before relying on any current or voltage-drop figure."]
+    if res.errors:
+        L += ["", "## Errors – calculation incomplete", ""] + [f"- {e}" for e in res.errors]
+        return "\n".join(L) + "\n"
+    L += ["", "## 3. Transformer schedule", "", "| Transformer | Rating (kVA) | Ratio | Fed by | Loads | Demand (kVA) | Loading |",
+          "|---|---|---|---|---|---|---|"]
+    L += [f"| {t['transformer']} | {t['rating_kva']} | {t['ratio']} | {t['fed_by']} | {t['loads']} | {t['demand_kva']} | {t['loading_pct']} % |"
+          for t in sched["transformers"]]
+    L += ["", "## 4. Feeder pillar schedule", "", "| Pillar | Fed by | Outgoing ways | Loads | Demand (kVA) |", "|---|---|---|---|---|"]
+    L += [f"| {p['pillar']} | {p['fed_by']} | {p['outgoing_ways']} | {p['loads']} | {p['demand_kva']} |" for p in sched["feeder_pillars"]]
+    L += ["", "## 5. Cable schedule", "",
+          "| Cable | From | To | Level | Type | Runs | Length (m) | Current (A) | Capacity (A) | ΔV (%) | Cumulative ΔV (%) |",
+          "|---|---|---|---|---|---|---|---|---|---|---|"]
+    L += [f"| {c['cable']} | {c['from']} | {c['to']} | {c['level']} | {c['type']} | {c['runs']} | {c['length_m']} | "
+          f"{c['current_a']} | {c['capacity_a']} | {c['drop_pct']} | {c['cum_drop_pct']} |" for c in sched["cables"]]
+    L += ["", "## 6. Load schedule", "", "| Load | Category | Connected (kW) | Demand (kW) | pf | Phases | Fed by |",
+          "|---|---|---|---|---|---|---|"]
+    L += [f"| {l['load']} | {l['category']} | {l['connected_kw']} | {l['demand_kw']} | {l['pf']} | {l['phases']} | {l['fed_by']} |"
+          for l in sched["loads"]]
+    L += ["", "## 7. Checks not passed", ""] + _failed(res.checks)
+    if res.proposals:
+        L += ["", "## 8. Proposed changes (not applied)", ""] + [f"- {p}" for p in res.proposals]
     L += ["", "## Review and approval", "", "| Role | Name / designation | Decision | Date |", "|---|---|---|---|",
           "| Designed by | | | |", "| Checked by | | | |", "| Approved by | | | |", ""]
     return "\n".join(L)

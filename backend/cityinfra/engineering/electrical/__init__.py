@@ -1,8 +1,8 @@
-"""electrical module – NOT YET IMPLEMENTED.
+"""Electrical distribution: radial HT/LT network, demand with diversity, transformer
+loading, cable current and voltage-drop checks, cable-size proposals, equipment schedules.
 
-STATUS = "pending".  No calculations exist in this module yet; the platform
-must report this discipline as pending rather than produce results.  See
-docs/platform/IMPLEMENTATION_PLAN.md for the planned scope.
-"""
+Pending: short-circuit levels, protection discrimination, earthing, load-flow for
+meshed / ring networks (candidate engine: pandapower)."""
 
-STATUS = "pending"
+STATUS = "implemented"
+PENDING = ["short-circuit", "protection discrimination", "earthing", "meshed-network load flow"]
