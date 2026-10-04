@@ -31,5 +31,5 @@ jobs:
       - name: Apply and verify database schema
         env: { PGPASSWORD: postgres }
         run: |
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f database/migrations/0001_core.sql
+          for f in database/migrations/*.sql; do psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f "$f"; done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f database/verify_schema.sql

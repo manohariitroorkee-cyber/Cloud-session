@@ -15,37 +15,14 @@ then slightly higher than the design-sheet flow – conservative).
 
 from __future__ import annotations
 
-import ctypes
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ...model.core import ObjectKind
 from ...gis.geometry import line_coords, point_coord
-from ..base import (SWMM_LOCK, EngineError, EngineRun, IdMap, fnum, load_library)
+from ..base import EngineError, EngineRun, IdMap, fnum
 
-# swmm5.h enums
-_NODE, _LINK = 2, 3
-NODE_DEPTH, NODE_HEAD, NODE_OVERFLOW = 303, 304, 308
-LINK_FLOW, LINK_DEPTH, LINK_VELOCITY = 410, 411, 412
-
-
-def _lib() -> ctypes.CDLL:
-    lib = load_library("CITYINFRA_SWMM_LIB", ["libswmm5.so", "libswmm5.dylib", "swmm5.dll"])
-    lib.swmm_open.argtypes = [ctypes.c_char_p] * 3
-    lib.swmm_start.argtypes = [ctypes.c_int]
-    lib.swmm_step.argtypes = [ctypes.POINTER(ctypes.c_double)]
-    lib.swmm_getValue.argtypes = [ctypes.c_int, ctypes.c_int]
-    lib.swmm_getValue.restype = ctypes.c_double
-    lib.swmm_getIndex.argtypes = [ctypes.c_int, ctypes.c_char_p]
-    lib.swmm_getError.argtypes = [ctypes.c_char_p, ctypes.c_int]
-    lib.swmm_getMassBalErr.argtypes = [ctypes.POINTER(ctypes.c_float)] * 3
-    return lib
-
-
-def engine_version() -> str:
-    v = _lib().swmm_getVersion()   # e.g. 52004
-    return f"{v // 10000}.{(v // 1000) % 10}.{v % 1000}"
+from .runner import engine_version, run_swmm  # noqa: F401  (re-exported)
 
 
 @dataclass
@@ -151,61 +128,9 @@ def build_inp(net, design, hours: int = 6) -> tuple[str, IdMap, IdMap, list[str]
 def run_sewer(net, design, hours: int = 6) -> SwmmResult:
     if not design.pipes:
         raise EngineError("no designed pipes to simulate (fix network errors first)")
-    lib = _lib()
     inp, nmap, lmap, notes = build_inp(net, design, hours)
-    with SWMM_LOCK, tempfile.TemporaryDirectory(prefix="swmm-") as tmp:
-        f_inp, f_rpt, f_out = (str(Path(tmp) / n) for n in ("model.inp", "model.rpt", "model.out"))
-        Path(f_inp).write_text(inp)
-        run = EngineRun("EPA SWMM", engine_version(), "ok", inp, messages=list(notes))
-        res = SwmmResult(run)
-
-        def fail(code: int) -> None:
-            buf = ctypes.create_string_buffer(512)
-            lib.swmm_getError(buf, 512)
-            lib.swmm_end(); lib.swmm_close()
-            rpt = Path(f_rpt).read_text(errors="replace") if Path(f_rpt).exists() else ""
-            raise EngineError(f"SWMM error {code}: {buf.value.decode(errors='replace').strip()}\n{_rpt_errors(rpt)}")
-
-        if (code := lib.swmm_open(f_inp.encode(), f_rpt.encode(), f_out.encode())):
-            fail(code)
-        if (code := lib.swmm_start(0)):
-            fail(code)
-        nidx = {name: lib.swmm_getIndex(_NODE, name.encode()) for name in nmap.to_object}
-        lidx = {name: lib.swmm_getIndex(_LINK, name.encode()) for name in lmap.to_object}
-        mx_nd = dict.fromkeys(nidx, 0.0); mx_nh = dict.fromkeys(nidx, -1e9); mx_no = dict.fromkeys(nidx, 0.0)
-        mx_lq = dict.fromkeys(lidx, 0.0); mx_ld = dict.fromkeys(lidx, 0.0); mx_lv = dict.fromkeys(lidx, 0.0)
-        last_nh: dict[str, float] = {}
-        last_l: dict[str, tuple[float, float, float]] = {}
-        t = ctypes.c_double(0.0)
-        while True:
-            if (code := lib.swmm_step(ctypes.byref(t))):
-                fail(code)
-            for name, i in nidx.items():
-                mx_nd[name] = max(mx_nd[name], lib.swmm_getValue(NODE_DEPTH, i))
-                last_nh[name] = h = lib.swmm_getValue(NODE_HEAD, i)
-                mx_nh[name] = max(mx_nh[name], h)
-                mx_no[name] = max(mx_no[name], lib.swmm_getValue(NODE_OVERFLOW, i))
-            for name, i in lidx.items():
-                q = abs(lib.swmm_getValue(LINK_FLOW, i))
-                y = lib.swmm_getValue(LINK_DEPTH, i)
-                v = abs(lib.swmm_getValue(LINK_VELOCITY, i))
-                last_l[name] = (q, y, v)
-                mx_lq[name] = max(mx_lq[name], q)
-                mx_ld[name] = max(mx_ld[name], y)
-                mx_lv[name] = max(mx_lv[name], v)
-            if t.value <= 0:
-                break
-        lib.swmm_end()
-        ro, fl, qu = ctypes.c_float(), ctypes.c_float(), ctypes.c_float()
-        lib.swmm_getMassBalErr(ctypes.byref(ro), ctypes.byref(fl), ctypes.byref(qu))
-        res.flow_continuity_error_pct = float(fl.value)
-        warnings = lib.swmm_getWarnings()
-        lib.swmm_report()
-        lib.swmm_close()
-        run.report_text = Path(f_rpt).read_text(errors="replace")
-        if warnings:
-            run.status = "warning"
-            run.messages.append(f"SWMM reported {warnings} warning(s); see report.")
+    raw = run_swmm(inp, list(nmap.to_object), list(lmap.to_object), notes=notes)
+    res = SwmmResult(raw.run, flow_continuity_error_pct=raw.flow_continuity_error_pct)
 
     crown: dict[str, float] = {}
     for d in design.pipes:
@@ -213,16 +138,13 @@ def run_sewer(net, design, hours: int = 6) -> SwmmResult:
         crown[p.us.id] = max(crown.get(p.us.id, -1e9), p.us_invert + p.diameter)
         crown[p.ds.id] = max(crown.get(p.ds.id, -1e9), p.ds_invert + p.diameter)
     for name, oid in nmap.to_object.items():
-        res.nodes[oid] = NodeResult(oid, mx_nd[name], mx_nh[name], mx_no[name],
-                                    mx_nh[name] > crown.get(oid, 1e9) + 1e-3, last_nh.get(name, 0.0))
+        s = raw.nodes[name]
+        res.nodes[oid] = NodeResult(oid, s.max["depth"], s.max["head"], s.max["overflow"],
+                                    s.max["head"] > crown.get(oid, 1e9) + 1e-3, s.final["head"])
     dia = {d.pipe.obj.id: d.pipe.diameter for d in design.pipes}
     for name, oid in lmap.to_object.items():
-        q, y, v = last_l.get(name, (0.0, 0.0, 0.0))
-        res.links[oid] = LinkResult(oid, mx_lq[name], mx_ld[name], mx_lv[name], mx_ld[name] / dia[oid],
-                                    q, v, y / dia[oid])
-    run.meta["flow_continuity_error_pct"] = res.flow_continuity_error_pct
+        s = raw.links[name]
+        res.links[oid] = LinkResult(oid, s.max["flow"], s.max["depth"], s.max["velocity"],
+                                    s.max["depth"] / dia[oid], s.final["flow"], s.final["velocity"],
+                                    s.final["depth"] / dia[oid])
     return res
-
-
-def _rpt_errors(rpt: str) -> str:
-    return "\n".join(l.strip() for l in rpt.splitlines() if "ERROR" in l.upper())[:2000]

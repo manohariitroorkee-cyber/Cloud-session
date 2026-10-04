@@ -63,6 +63,8 @@ class ObjectKind(str, Enum):
     TRANSFORMER = "transformer"
     ELECTRICAL_CABLE = "electrical_cable"
     POLE = "pole"
+    FEEDER_PILLAR = "feeder_pillar"
+    ELECTRICAL_LOAD = "electrical_load"
     # gas
     PNG_SOURCE = "png_source"
     PNG_REGULATOR = "png_regulator"
@@ -106,6 +108,8 @@ KIND_SPEC: dict[ObjectKind, tuple[Discipline, tuple[str, ...]]] = {
     ObjectKind.TRANSFORMER: (Discipline.ELECTRICAL, _POINT),
     ObjectKind.ELECTRICAL_CABLE: (Discipline.ELECTRICAL, _LINE),
     ObjectKind.POLE: (Discipline.ELECTRICAL, _POINT),
+    ObjectKind.FEEDER_PILLAR: (Discipline.ELECTRICAL, _POINT),
+    ObjectKind.ELECTRICAL_LOAD: (Discipline.ELECTRICAL, _POINT),
     ObjectKind.PNG_SOURCE: (Discipline.PNG, _POINT),
     ObjectKind.PNG_REGULATOR: (Discipline.PNG, _POINT),
     ObjectKind.PNG_NODE: (Discipline.PNG, _POINT),
@@ -137,6 +141,7 @@ class RelationType(str, Enum):
     CROSSES = "crosses"                    # utility -> utility / road it crosses
     DEPENDS_ON_LEVEL = "depends_on_level"  # object whose levels derive from another
     FEEDS = "feeds"                        # transformer -> cable, reservoir -> zone
+    DRAINS_TO = "drains_to"                # catchment -> drain node / inlet
 
 
 def new_id() -> str:

@@ -1,0 +1,56 @@
+# CPHEEO Manual on Storm Water Drainage Systems (2019, 1st edition).
+# All values transcribed from a secondary summary (infralens.in), NOT from the
+# printed manual – every one requires verification against the primary text.
+id: cpheeo_storm_water_2019
+title: CPHEEO Manual on Storm Water Drainage Systems, 2019
+source_document: CPHEEO Manual on Storm Water Drainage Systems 2019
+
+parameters:
+  return_period_years:
+    value: {residential: [2, 5], commercial: [5, 10], arterial_road: [10, 25], underpass: [25, 50], critical_infrastructure: [50, 100]}
+    unit: years
+    description: Recommended design return period range by area type
+    source: {clause: "Ch. 1"}
+    verification: requires_verification
+
+  runoff_coefficient_range:
+    value: {paved: [0.85, 0.95], roof: [0.85, 0.95], dense_residential: [0.65, 0.80], medium_residential: [0.40, 0.60], lawn_clay: [0.20, 0.40], lawn_sandy: [0.10, 0.25], open_ground: [0.10, 0.30]}
+    unit: "-"
+    description: Guidance range of runoff coefficient C by surface (Rational method)
+    source: {clause: "Ch. 3"}
+    verification: requires_verification
+
+  min_velocity:
+    value: 0.6
+    unit: m/s
+    description: Minimum (self-cleansing) velocity at design discharge
+    source: {clause: "Ch. 5"}
+    verification: requires_verification
+
+  max_velocity:
+    value: 3.0
+    unit: m/s
+    description: Maximum velocity (summary states 3–4 m/s for concrete; lower bound adopted)
+    source: {clause: "Ch. 5", note: "Range 3–4 m/s in summary; 3.0 adopted pending verification"}
+    verification: requires_verification
+
+  max_depth_ratio_pipe:
+    value: 0.8
+    unit: d/D
+    description: Maximum design depth ratio in storm-water pipes
+    source: {clause: "Ch. 5"}
+    verification: requires_verification
+
+  min_pipe_diameter_mm:
+    value: 300
+    unit: mm
+    description: Minimum storm-water pipe diameter
+    source: {clause: "Ch. 7"}
+    verification: requires_verification
+
+  manning_n_drains:
+    value: {rcc: 0.015, hdpe: 0.011, upvc: 0.011, brick: 0.017, grass: 0.035}
+    unit: s/m^(1/3)
+    description: Manning's n by drain lining (design values)
+    source: {clause: "Ch. 5", note: "RCC 0.015 = design value incl. ageing; brick 0.015–0.017 and grass 0.030–0.035 – upper ends adopted"}
+    verification: requires_verification

@@ -1,0 +1,25 @@
+id: project_road_defaults
+title: Project road design decisions (defaults – confirm per project)
+source_document: Project design basis report
+
+parameters:
+  max_grade_pct:
+    value: 4.0
+    unit: "%"
+    description: Maximum longitudinal grade adopted for the project's roads
+    source: {clause: "Design basis", note: "Confirm against IRC:86 / IRC:SP:23 for the road class"}
+    verification: project_decision
+
+  min_grade_pct:
+    value: 0.3
+    unit: "%"
+    description: Minimum longitudinal grade on kerbed roads for surface drainage
+    source: {clause: "Design basis"}
+    verification: project_decision
+
+  min_vertical_curve_m:
+    value: 30
+    unit: m
+    description: Minimum vertical curve length where a grade change exists
+    source: {clause: "Design basis", note: "Confirm against IRC:SP:23"}
+    verification: project_decision

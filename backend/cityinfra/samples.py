@@ -80,3 +80,92 @@ def sample_water_project() -> Project:
         pr.relate(p, n[a], RelationType.UPSTREAM_NODE)
         pr.relate(p, n[b], RelationType.DOWNSTREAM_NODE)
     return pr
+
+
+# SYNTHETIC IDF – invented coefficients of plausible magnitude, NOT for design.
+SYNTHETIC_IDF = {
+    "form": "power",
+    "source": "SYNTHETIC test IDF (invented coefficients) – replace with IMD/project hydrology data",
+    "return_periods": {"2": {"a": 1100.0, "b": 15.0, "n": 0.8},
+                       "5": {"a": 1500.0, "b": 15.0, "n": 0.8},
+                       "10": {"a": 1800.0, "b": 15.0, "n": 0.8}},
+}
+
+
+def _poly(*pts: tuple[float, float]) -> dict:
+    ring = [[E0 + x, N0 + y] for x, y in pts]
+    return {"type": "Polygon", "coordinates": [ring + [ring[0]]]}
+
+
+def sample_drainage_project() -> Project:
+    """Three catchments → two pipes → an open trapezoidal drain → outfall.
+
+    Pipe D2 is deliberately undersized so failure, alternatives and SWMM
+    flooding can be exercised.
+    """
+    pr = Project("Synthetic sector storm drainage", crs_epsg=32643)
+    nd = {}
+    for name, (x, y, gl) in {"DN1": (0, 0, 216.5), "DN2": (120, 0, 216.2), "DN3": (240, 0, 215.9)}.items():
+        nd[name] = pr.add(EngineeringObject(ObjectKind.DRAIN_NODE, _pt(x, y), name=name, attributes={"ground_level": gl}))
+    nd["OF1"] = pr.add(EngineeringObject(ObjectKind.DRAIN_OUTFALL, _pt(400, 0), name="OF1",
+                                         attributes={"ground_level": 215.2, "invert_level": 213.20}))
+    cts = [("C1", _poly((-100, 10), (110, 10), (110, 160), (-100, 160)), "DN1",
+            {"paved": 0.4, "roof": 0.35, "lawn_clay": 0.25}, 55),
+           ("C2", _poly((110, 10), (230, 10), (230, 160), (110, 160)), "DN2",
+            {"paved": 0.5, "roof": 0.3, "lawn_clay": 0.2}, 60),
+           ("C3", _poly((230, -150), (390, -150), (390, -10), (230, -10)), "DN3",
+            {"paved": 0.3, "roof": 0.3, "open_ground": 0.4}, 45)]
+    for name, geom, node, surf, imp in cts:
+        c = pr.add(EngineeringObject(ObjectKind.CATCHMENT, geom, name=name, attributes={
+            "surfaces": surf, "impervious_pct": imp, "flow_length_m": 120, "overland_slope": 0.01}))
+        pr.relate(c, nd[node], RelationType.DRAINS_TO)
+    drains = [("D1", "DN1", "DN2", {"shape": "circular", "diameter_mm": 600, "lining": "rcc",
+                                    "us_invert": 215.00, "ds_invert": 214.70}),
+              ("D2", "DN2", "DN3", {"shape": "circular", "diameter_mm": 600, "lining": "rcc",     # undersized
+                                    "us_invert": 214.65, "ds_invert": 214.35}),
+              ("D3", "DN3", "OF1", {"shape": "trapezoidal", "width_m": 1.0, "height_m": 1.0, "side_slope": 1.0,
+                                    "lining": "rcc", "us_invert": 214.20, "ds_invert": 213.40})]
+    for name, a, b, attrs in drains:
+        ga, gb = nd[a].geometry["coordinates"], nd[b].geometry["coordinates"]
+        d = pr.add(EngineeringObject(ObjectKind.STORM_DRAIN, {"type": "LineString", "coordinates": [ga, gb]},
+                                     name=name, attributes=attrs))
+        pr.relate(d, nd[a], RelationType.UPSTREAM_NODE)
+        pr.relate(d, nd[b], RelationType.DOWNSTREAM_NODE)
+    return pr
+
+
+SAMPLE_ROAD_TEMPLATE = {
+    "median": {"width": 1.2, "raised_m": 0.15},
+    "strips": [
+        {"type": "carriageway", "width": 7.0, "crossfall_pct": -2.5},
+        {"type": "cycle_track", "width": 2.0, "crossfall_pct": -2.0, "step_m": 0.15},
+        {"type": "footpath", "width": 2.0, "crossfall_pct": 2.0, "step_m": 0.10},
+        {"type": "drain", "width": 1.0, "crossfall_pct": 0.0},
+        {"type": "utility_corridor", "width": 2.0, "crossfall_pct": 2.0},
+        {"type": "verge", "width": 1.0, "crossfall_pct": 4.0},
+    ],
+}
+
+
+def sample_road_project() -> Project:
+    """A 45 m ROW road with two curves over a synthetic gently undulating TIN,
+    and two manholes inside the corridor (one at a stale ground level)."""
+    import math as _m
+    pr = Project("Synthetic sector road", crs_epsg=32643)
+    for i in range(-6, 30):
+        for j in range(-4, 13):
+            x, y = i * 20.0, j * 20.0
+            z = 216.0 - 0.002 * x + 0.3 * _m.sin(x / 60) + 0.1 * _m.cos(y / 40)
+            pr.add(EngineeringObject(ObjectKind.TERRAIN_POINT, {"type": "Point", "coordinates": [E0 + x, N0 + y, z]}))
+    from .engineering.roads.horizontal import build as _build
+    pis = [(-50, 30), (150, 30), (300, 120), (500, 120)]
+    curves = {"1": [200, 60], "2": [200, 60]}
+    length = _build([(E0 + x, N0 + y) for x, y in pis], {int(k): tuple(v) for k, v in curves.items()}).length
+    road = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln(*pis), name="R1", attributes={
+        "design_speed_kmh": 50, "kerbed": True,
+        "curves": curves,
+        "profile": [[0, 216.40, 0], [200, 215.60, 80], [round(length, 3), 216.90, 0]],
+        "template": SAMPLE_ROAD_TEMPLATE, "section_interval_m": 20}))
+    pr.add(EngineeringObject(ObjectKind.MANHOLE, _pt(60, 34), name="MH-R1", attributes={"ground_level": 215.70}))
+    pr.add(EngineeringObject(ObjectKind.MANHOLE, _pt(100, 26), name="MH-R2", attributes={"ground_level": 216.122}))
+    return pr

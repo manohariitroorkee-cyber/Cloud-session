@@ -10,7 +10,7 @@ engines/build_engines.sh                  # from repo root: builds libepanet2 (t
 cd backend
 python -m venv .venv && . .venv/bin/activate
 pip install -e .
-python -m unittest discover -s tests -t .   # 27 tests; engine tests skip if libraries are absent
+python -m unittest discover -s tests -t .   # 53 tests; engine tests skip if libraries are absent
 ```
 
 ## Try it
@@ -18,6 +18,8 @@ python -m unittest discover -s tests -t .   # 27 tests; engine tests skip if lib
 ```bash
 python -m cityinfra.cli sewer --sample -o sewer_report.md   # synthetic network: design sheet + SWMM
 python -m cityinfra.cli water --sample                       # synthetic network: EPANET + pressure checks
+python -m cityinfra.cli drainage --sample                    # synthetic IDF + catchments: Rational sheet + SWMM storm
+python -m cityinfra.cli road --sample                        # alignment, curves, long-section, utility level impacts
 python -m cityinfra.cli sewer my_network.geojson --epsg 32643
 ```
 

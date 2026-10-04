@@ -1,8 +1,10 @@
-"""roads module – NOT YET IMPLEMENTED.
+"""Roads: horizontal alignment (circular curves, clothoid transitions, chainage),
+vertical alignment (grades, parabolic curves), sight-distance and curve checks,
+long-section and cross-section geometry, and level coordination with utilities.
 
-STATUS = "pending".  No calculations exist in this module yet; the platform
-must report this discipline as pending rather than produce results.  See
-docs/platform/IMPLEMENTATION_PLAN.md for the planned scope.
-"""
+Out of scope by decision: pavement thickness design, structural (RCC) design,
+earthwork and quantities."""
 
-STATUS = "pending"
+STATUS = "implemented"
+OUT_OF_SCOPE = ["pavement thickness design", "structural (RCC) design", "earthwork and quantities"]
+PENDING = ["junction/intersection geometry", "curve widening"]

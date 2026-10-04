@@ -3,6 +3,8 @@
     python -m cityinfra.cli sewer  <network.geojson> [--epsg 32643] [--no-swmm] [-o report.md]
     python -m cityinfra.cli sewer  --sample            # synthetic demonstration network
     python -m cityinfra.cli water  --sample
+    python -m cityinfra.cli drainage --sample [--idf idf.json] [--return-period 5] [--area-type residential]
+    python -m cityinfra.cli road   --sample
 """
 
 from __future__ import annotations
@@ -24,7 +26,9 @@ from .rules.framework import RuleContext, RuleSet
 def _project(args) -> Project:
     if args.sample:
         from .samples import sample_sewer_project, sample_water_project
-        return sample_sewer_project() if args.cmd == "sewer" else sample_water_project()
+        from .samples import sample_drainage_project, sample_road_project
+        return {"sewer": sample_sewer_project, "water": sample_water_project,
+                "drainage": sample_drainage_project, "road": sample_road_project}[args.cmd]()
     pr = Project(Path(args.file).stem, args.epsg)
     problems = import_feature_collection(pr, json.loads(Path(args.file).read_text()))
     if problems:
@@ -34,11 +38,14 @@ def _project(args) -> Project:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cityinfra")
-    ap.add_argument("cmd", choices=["sewer", "water"])
+    ap.add_argument("cmd", choices=["sewer", "water", "drainage", "road"])
     ap.add_argument("file", nargs="?")
     ap.add_argument("--sample", action="store_true")
     ap.add_argument("--epsg", type=int, default=32643)
     ap.add_argument("--no-swmm", action="store_true")
+    ap.add_argument("--idf", help="IDF JSON (see engineering/drainage/rainfall.py)")
+    ap.add_argument("--return-period", type=float, default=5)
+    ap.add_argument("--area-type", default="residential")
     ap.add_argument("-o", "--output")
     args = ap.parse_args(argv)
     if not args.sample and not args.file:
@@ -57,6 +64,39 @@ def main(argv=None) -> int:
             except EngineUnavailable as e:
                 print(f"SWMM pending: {e}", file=sys.stderr)
         text = render(pr.name, res, rules, swmm_res)
+    elif args.cmd == "drainage":
+        from .engineering.drainage.network import build_network as build_dn, design_network as design_dn
+        from .engineering.drainage.rainfall import IDF
+        from .reports.design_reports import drainage as drainage_report
+        if args.idf:
+            idf = IDF(json.loads(Path(args.idf).read_text()))
+        elif args.sample:
+            from .samples import SYNTHETIC_IDF
+            idf = IDF(SYNTHETIC_IDF)
+        else:
+            sys.exit("Drainage design needs --idf (project IDF from IMD / hydrology report).")
+        rules = RuleContext([RuleSet.load("cpheeo_storm_water_2019.yaml"), RuleSet.load("project_drainage_defaults.yaml")])
+        net = build_dn(pr, rules)
+        res = design_dn(net, rules, idf, args.return_period, args.area_type)
+        swmm_res = None
+        if not args.no_swmm and res.drains:
+            try:
+                from .engines.swmm.drainage import run_drainage
+                swmm_res = run_drainage(net, rules, idf, args.return_period)
+            except EngineUnavailable as e:
+                print(f"SWMM pending: {e}", file=sys.stderr)
+        text = drainage_report(pr.name, res, rules, args.area_type, swmm_res)
+    elif args.cmd == "road":
+        from .engineering.roads.design import design_road, level_impacts, terrain
+        from .model.core import ObjectKind
+        from .reports.design_reports import road as road_report
+        rules = RuleContext([RuleSet.load("irc_geometric_design.yaml"), RuleSet.load("project_road_defaults.yaml")])
+        tin = terrain(pr)
+        parts = []
+        for r in pr.of_kind(ObjectKind.ROAD_ALIGNMENT):
+            d = design_road(pr, r, rules)
+            parts.append(road_report(pr.name, d, rules, level_impacts(pr, d) if not d.errors else [], tin))
+        text = "\n\n".join(parts) or "No road alignments found."
     else:
         from .engines.epanet.adapter import run_water
         from .engineering.water.checks import pressure_checks

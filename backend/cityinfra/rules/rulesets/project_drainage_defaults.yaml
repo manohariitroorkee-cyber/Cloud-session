@@ -1,0 +1,54 @@
+# Project decisions for storm drainage – confirm per project.
+id: project_drainage_defaults
+title: Project drainage design decisions (defaults – confirm per project)
+source_document: Project design basis report
+
+parameters:
+  runoff_coefficients:
+    value: {paved: 0.90, roof: 0.90, dense_residential: 0.75, medium_residential: 0.55, lawn_clay: 0.35, lawn_sandy: 0.20, open_ground: 0.25}
+    unit: "-"
+    description: Adopted C per surface type (within CPHEEO guidance ranges, towards the upper end)
+    source: {clause: "Design basis"}
+    verification: project_decision
+
+  min_inlet_time_min:
+    value: 5
+    unit: min
+    description: Lower limit on catchment inlet time
+    source: {clause: "Design basis"}
+    verification: project_decision
+
+  min_freeboard_m:
+    value: 0.15
+    unit: m
+    description: Minimum freeboard in open/box drains at design flow
+    source: {clause: "Design basis", note: "Set per project / authority requirement"}
+    verification: project_decision
+
+  drain_pipe_diameters_mm:
+    value: [300, 375, 450, 600, 750, 900, 1000, 1200, 1400, 1600, 1800]
+    unit: mm
+    description: Pipe sizes available for alternatives
+    source: {clause: "Design basis"}
+    verification: project_decision
+
+  design_storm:
+    value: {duration_min: 120, step_min: 5, peak_position: 0.5}
+    unit: "-"
+    description: Design-storm hyetograph for SWMM (alternating block)
+    source: {clause: "Modelling decision"}
+    verification: project_decision
+
+  horton_infiltration:
+    value: {max_rate_mm_h: 75, min_rate_mm_h: 6, decay_per_h: 4, dry_days: 7}
+    unit: "-"
+    description: Horton parameters for pervious areas (SWMM)
+    source: {clause: "Modelling decision", note: "Set from soil investigation"}
+    verification: project_decision
+
+  subcatchment_surface:
+    value: {n_imperv: 0.013, n_perv: 0.15, dstore_imperv_mm: 2, dstore_perv_mm: 5, pct_zero_storage: 25}
+    unit: "-"
+    description: SWMM subcatchment surface parameters
+    source: {clause: "Modelling decision"}
+    verification: project_decision

@@ -1,0 +1,85 @@
+# IRC geometric design parameters.  Transcribed from secondary summaries and
+# textbook statements of IRC:73 / IRC:86 / IRC:66 / IRC:SP:23 – NOT from the
+# printed codes.  Every value requires verification; urban-road values may
+# differ (IRC:86) from rural highway values (IRC:73).
+id: irc_geometric_design
+title: IRC geometric design (IRC:73, IRC:86, IRC:66, IRC:SP:23)
+source_document: IRC codes for geometric design
+
+parameters:
+  e_max:
+    value: 0.07
+    unit: fraction
+    description: Maximum superelevation, plain and rolling terrain
+    source: {document: "IRC:86-2018", clause: "cl. 6.2.1 (per secondary summary)"}
+    verification: requires_verification
+
+  f_lateral:
+    value: 0.15
+    unit: "-"
+    description: Coefficient of lateral friction for minimum radius
+    source: {document: "IRC:86-2018", clause: "cl. 6.2.2 (per secondary summary)"}
+    verification: requires_verification
+
+  e_design_divisor:
+    value: 225
+    unit: "-"
+    description: Design superelevation e = V²/(225R) (75 % of design speed, friction neglected), capped at e_max
+    source: {document: "IRC:73", clause: "Superelevation (clause not confirmed)"}
+    verification: requires_verification
+
+  c_rate:
+    value: {numerator: 80, offset: 75, min: 0.5, max: 0.8}
+    unit: m/s³
+    description: Rate of change of centrifugal acceleration C = 80/(75+V), limited to 0.5–0.8
+    source: {document: "IRC:73 / IRC:38", clause: "Transition curves (clause not confirmed)"}
+    verification: requires_verification
+
+  superelevation_runoff_N:
+    value: 150
+    unit: "1 in N"
+    description: Rate of introduction of superelevation (plain/rolling), rotation about centreline
+    source: {document: "IRC:73", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  reaction_time_s:
+    value: 2.5
+    unit: s
+    description: Perception-reaction time for stopping sight distance
+    source: {document: "IRC:66 / IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  f_longitudinal:
+    value: [[30, 0.40], [40, 0.38], [50, 0.37], [60, 0.36], [null, 0.35]]
+    unit: "-"
+    description: Longitudinal friction coefficient vs design speed (km/h), step table
+    source: {document: "IRC:66", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  eye_height_m:
+    value: 1.2
+    unit: m
+    description: Driver eye height (crest curves)
+    source: {document: "IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  object_height_m:
+    value: 0.15
+    unit: m
+    description: Object height for stopping sight distance (crest curves)
+    source: {document: "IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  headlight_height_m:
+    value: 0.75
+    unit: m
+    description: Headlight height (sag curves)
+    source: {document: "IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  headlight_beam_deg:
+    value: 1.0
+    unit: degree
+    description: Upward divergence of headlight beam (sag curves)
+    source: {document: "IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification

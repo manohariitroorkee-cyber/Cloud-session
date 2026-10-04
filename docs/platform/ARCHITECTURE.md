@@ -1,7 +1,8 @@
 # City Infrastructure Engineering Platform – Architecture
 
-Status: Stage 1 (foundation, sewer, SWMM and EPANET adapters) implemented on branch
-`platform/foundation-stage1`. See `IMPLEMENTATION_PLAN.md` for what is done and what is pending.
+Status: foundation, sewer (+SWMM), water (+EPANET), storm drainage (hydraulic, +SWMM) and road
+alignment/curve design implemented on branch `platform/foundation-stage1`. Pavement thickness design and
+structural (RCC) design are out of scope. See `IMPLEMENTATION_PLAN.md` for what is done and what is pending.
 
 ---
 

@@ -1,8 +1,7 @@
-"""drainage module – NOT YET IMPLEMENTED.
+"""Storm-water drainage – HYDRAULIC design only: catchments, Rational-method
+sizing, Manning normal-depth checks, SWMM runoff/routing/flooding analysis.
 
-STATUS = "pending".  No calculations exist in this module yet; the platform
-must report this discipline as pending rather than produce results.  See
-docs/platform/IMPLEMENTATION_PLAN.md for the planned scope.
-"""
+Out of scope by decision: structural (RCC) design of drains, culverts and chambers."""
 
-STATUS = "pending"
+STATUS = "implemented"
+OUT_OF_SCOPE = ["structural (RCC) design"]
