@@ -38,9 +38,13 @@ const css = execFileSync(
 appJs = appJs.replace(/<\/script/gi, "<\\/script");
 const safeCss = css.replace(/<\/style/gi, "<\\/style");
 
+// The help layer is dependency-free plain JS and is inlined as written.
+const helpJs = readFileSync(here("./help.js"), "utf8").replace(/<\/script/gi, "<\\/script");
+
 const body = readFileSync(here("./template.html"), "utf8")
   .replace("/*__TAILWIND_CSS__*/", () => safeCss)
-  .replace("/*__APP_JS__*/", () => appJs);
+  .replace("/*__APP_JS__*/", () => appJs)
+  .replace("/*__HELP_JS__*/", () => helpJs);
 
 // The repo copy is a complete document that opens straight from disk.
 const html = `<!doctype html>

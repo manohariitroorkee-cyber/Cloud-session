@@ -2,9 +2,9 @@ name: platform
 
 on:
   push:
-    paths: ["backend/**", "database/**", "engines/**", "src/**", ".github/workflows/platform.yml"]
+    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html", ".github/workflows/platform.yml"]
   pull_request:
-    paths: ["backend/**", "database/**", "engines/**", "src/**"]
+    paths: ["backend/**", "database/**", "engines/**", "src/**", "web-src/**", "index.html"]
 
 jobs:
   backend:
@@ -33,3 +33,15 @@ jobs:
         run: |
           for f in database/migrations/*.sql; do psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f "$f"; done
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f database/verify_schema.sql
+
+  ui-help:
+    # Every visible control in index.html must have a help description (docs/platform/UI_GUIDELINES.md).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Install Playwright and Chromium
+        run: npm install -g playwright@1.56.0 && npx playwright install --with-deps chromium
+      - name: Audit help coverage
+        run: NODE_PATH=$(npm root -g) node web-src/check-help.cjs index.html

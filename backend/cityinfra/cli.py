@@ -37,16 +37,36 @@ def _project(args) -> Project:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="cityinfra")
-    ap.add_argument("cmd", choices=["sewer", "water", "drainage", "road"])
-    ap.add_argument("file", nargs="?")
-    ap.add_argument("--sample", action="store_true")
-    ap.add_argument("--epsg", type=int, default=32643)
-    ap.add_argument("--no-swmm", action="store_true")
-    ap.add_argument("--idf", help="IDF JSON (see engineering/drainage/rainfall.py)")
-    ap.add_argument("--return-period", type=float, default=5)
-    ap.add_argument("--area-type", default="residential")
-    ap.add_argument("-o", "--output")
+    ap = argparse.ArgumentParser(
+        prog="cityinfra",
+        description="Run a design check on a network and write a report. Every report is a calculation for "
+                    "review – not a certified or approved design.",
+        epilog="Examples:\n"
+               "  cityinfra sewer --sample -o sewer.md        try the sewer check on the built-in example\n"
+               "  cityinfra sewer mynet.geojson -o sewer.md   check your own network (GeoJSON, metres)\n"
+               "  cityinfra drainage mynet.geojson --idf idf.json --return-period 5 --area-type residential\n"
+               "  cityinfra road --sample                     alignment and curve checks for the example road",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", choices=["sewer", "water", "drainage", "road"], metavar="CHECK",
+                    help="what to check: sewer (design sheet + SWMM), water (EPANET pressures), "
+                         "drainage (Rational method + SWMM storm), road (alignment and curves)")
+    ap.add_argument("file", nargs="?", metavar="NETWORK.geojson",
+                    help="your network as a GeoJSON FeatureCollection in the project's projected CRS (metres)")
+    ap.add_argument("--sample", action="store_true",
+                    help="use the built-in synthetic example instead of a file (for trying the tool)")
+    ap.add_argument("--epsg", type=int, default=32643, metavar="CODE",
+                    help="projected coordinate system of the file (default 32643 = UTM 43N, Delhi)")
+    ap.add_argument("--no-swmm", action="store_true",
+                    help="skip the SWMM network simulation; report the design sheet only")
+    ap.add_argument("--idf", metavar="IDF.json",
+                    help="drainage only: rainfall intensity-duration-frequency data from IMD / hydrology report")
+    ap.add_argument("--return-period", type=float, default=5, metavar="YEARS",
+                    help="drainage only: design storm return period in years (default 5)")
+    ap.add_argument("--area-type", default="residential", metavar="TYPE",
+                    help="drainage only: residential, commercial, arterial_road, underpass or "
+                         "critical_infrastructure – used to check the return period (default residential)")
+    ap.add_argument("-o", "--output", metavar="REPORT.md",
+                    help="write the report to this file instead of the screen")
     args = ap.parse_args(argv)
     if not args.sample and not args.file:
         ap.error("give a GeoJSON file or --sample")
