@@ -6,8 +6,14 @@ CATCHMENT     Polygon. attributes: surfaces {surface: fraction} (fractions sum t
               or runoff_coefficient; inlet_time_min, or flow_length_m + overland_slope
               (Kirpich); impervious_pct, overland_slope, flow_length_m (for SWMM).
               relationship DRAINS_TO → drain node.
-DRAIN_NODE    Point. ground_level.
-DRAIN_OUTFALL Point. ground_level, invert_level, tailwater_level (optional, fixed).
+DRAIN_NODE    Point. ground_level (or taken from TERRAIN_POINTs around it);
+              external_inflow_m3s (optional – flow arriving from outside the drawing).
+DRAIN_OUTFALL Point. ground_level, invert_level, tailwater_level (optional – highest water
+              level of the receiving channel, e.g. HFL; used as a fixed SWMM boundary).
+Existing objects (status "existing") are surveyed facts: existing drains are not resized but
+assessed for capacity, flow already carried, and residual capacity (see existing.py);
+existing catchments (developed areas, villages) load them.  A catchment with levels_fixed
+and outlet_level (a village) must be able to discharge freely at that level.
 STORM_DRAIN   LineString drawn upstream → downstream. shape (circular | rectangular |
               trapezoidal), diameter_mm or width_m + height_m (+ side_slope H:V),
               closed (box), lining (Manning n key), us_invert, ds_invert.
@@ -51,6 +57,17 @@ class Drain:
     lining: str
     us_invert: float
     ds_invert: float
+    existing: bool = False
+    silt_m: float = 0.0
+
+    @property
+    def flow_section(self) -> Section:
+        """Section available to the flow: an open drain's bed is raised by the silt in it."""
+        sec = self.section
+        if self.silt_m <= 0 or sec.shape == "circular":
+            return sec
+        return Section(sec.shape, max(sec.depth - self.silt_m, 1e-3), sec.width + 2 * sec.side_slope * self.silt_m,
+                       sec.side_slope, sec.closed)
 
     @property
     def slope(self) -> float:
@@ -74,6 +91,7 @@ class DrainageNetwork:
     catchments: list[Catchment]
     order: list[str]
     errors: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     def incoming(self, nid: str) -> list[Drain]:
         return [d for d in self.drains.values() if d.ds.id == nid]
@@ -109,8 +127,26 @@ def composite_c(o: EngineeringObject, rules: RuleContext) -> float:
     return sum(f * table[s] for s, f in surfaces.items())
 
 
+def fill_ground_from_survey(pr: Project, objs) -> list[str]:
+    """Give points without a ground level the level interpolated from the survey points (TIN)."""
+    from ..roads.design import terrain
+    todo = [o for o in objs if o.attr("ground_level") is None]
+    tin = terrain(pr) if todo else None
+    notes = []
+    for o in todo:
+        if tin is None:
+            break
+        c = point_coord(o.geometry)
+        z = tin.level(c[0], c[1])
+        if z is not None:
+            o.attributes["ground_level"] = round(z, 3)
+            notes.append(f"{o.label}: ground level {z:.3f} m taken from the survey points.")
+    return notes
+
+
 def build_network(pr: Project, rules: RuleContext) -> DrainageNetwork:
     nodes = {o.id: o for o in pr.of_kind(*NODE_KINDS)}
+    notes = fill_ground_from_survey(pr, nodes.values())
     errors: list[str] = []
     drains: dict[str, Drain] = {}
     for o in pr.of_kind(ObjectKind.STORM_DRAIN):
@@ -136,7 +172,11 @@ def build_network(pr: Project, rules: RuleContext) -> DrainageNetwork:
             errors.append(f"Drain {o.label}: lining missing (it sets Manning's n).")
             continue
         d = Drain(o, us, ds, line_length(o.geometry), sec, str(o.attr("lining")).lower(),
-                  float(o.attr("us_invert")), float(o.attr("ds_invert")))
+                  float(o.attr("us_invert")), float(o.attr("ds_invert")), o.status.value == "existing",
+                  float(o.attr("silt_depth_m") or 0.0))
+        if d.silt_m and sec.shape == "circular":
+            errors.append(f"Drain {o.label}: silt depth is modelled for open and box drains only; "
+                          "for a silted pipe enter the clear diameter.")
         if d.slope <= 0:
             errors.append(f"Drain {o.label}: adverse or flat bed slope.")
         drains[o.id] = d
@@ -179,7 +219,7 @@ def build_network(pr: Project, rules: RuleContext) -> DrainageNetwork:
                     ready.append(k2)
     if len(order) != len(drains):
         errors.append("Loop in drainage network.")
-    return DrainageNetwork(pr, nodes, drains, catchments, order, errors)
+    return DrainageNetwork(pr, nodes, drains, catchments, order, errors, notes)
 
 
 @dataclass
@@ -193,6 +233,7 @@ class DrainDesign:
     manning_n: float
     state: ChannelFlow
     travel_min: float
+    ext_flow: float = 0.0
     checks: list[CheckResult] = field(default_factory=list)
     alternatives: list[str] = field(default_factory=list)
 
@@ -222,6 +263,7 @@ class DrainageDesignResult:
     checks: list[CheckResult]
     errors: list[str]
     notes: list[str] = field(default_factory=list)
+    existing: list = field(default_factory=list)       # ExistingDrainAssessment (existing.py)
 
     @property
     def failing(self) -> list[DrainDesign]:
@@ -231,8 +273,16 @@ class DrainageDesignResult:
         return [c for d in self.drains for c in d.checks] + self.checks
 
 
+def existing_only(net: DrainageNetwork) -> DrainageNetwork:
+    """The network as it is today: existing drains loaded by existing catchments only."""
+    drains = {k: d for k, d in net.drains.items() if d.existing}
+    return DrainageNetwork(net.project, net.nodes, drains,
+                           [c for c in net.catchments if c.obj.status.value == "existing"],
+                           [k for k in net.order if k in drains], list(net.errors), list(net.notes))
+
+
 def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
-                   return_period: float, area_type: str) -> DrainageDesignResult:
+                   return_period: float, area_type: str, _assess_existing: bool = True) -> DrainageDesignResult:
     general: list[CheckResult] = []
     par = rules.get("return_period_years")
     rng = par.value.get(area_type)
@@ -264,7 +314,7 @@ def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
     at_node: dict[str, list[Catchment]] = {}
     for ct in net.catchments:
         at_node.setdefault(ct.node.id, []).append(ct)
-    carried: dict[str, tuple[float, float, float]] = {}   # drain id -> (ΣCA, ΣA, tc at its downstream end)
+    carried: dict[str, tuple[float, float, float, float]] = {}   # drain id -> (ΣCA, ΣA, tc at its end, external Q)
 
     for k in net.order:
         d = net.drains[k]
@@ -276,35 +326,41 @@ def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
         ca = sum(c.c * c.area_ha for c in at_node.get(d.us.id, []))
         area = sum(c.area_ha for c in at_node.get(d.us.id, []))
         tcs = [c.tc_min for c in at_node.get(d.us.id, [])]
+        ext = float(d.us.attr("external_inflow_m3s") or 0.0)
         for inc in net.incoming(d.us.id):
             if inc.obj.id in carried:
-                ca_i, a_i, tc_i = carried[inc.obj.id]
-                ca += ca_i; area += a_i; tcs.append(tc_i)
+                ca_i, a_i, tc_i, ext_i = carried[inc.obj.id]
+                ca += ca_i; area += a_i; tcs.append(tc_i); ext += ext_i
         tc = max(tcs) if tcs else rules.value("min_inlet_time_min")
         try:
             i = idf.intensity(tc, return_period)
         except (KeyError, ValueError) as e:
             errors.append(f"Drain {d.obj.label}: {e}")
             continue
-        q = ca * i / 360.0
-        st = normal_flow(d.section, d.slope, n, q)
+        q = ca * i / 360.0 + ext
+        sec = d.flow_section
+        st = normal_flow(sec, d.slope, n, q)
         if st.capacity_ok:
             v = st.velocity
         else:
             # surcharged: the true velocity is unknown until the drain is resized; use the faster of the
             # capacity velocity and Q/A_full so downstream tc (and hence intensity) is not understated
-            v = max(st.q_capacity / d.section.full_area(), q / d.section.full_area())
+            v = max(st.q_capacity / sec.full_area(), q / sec.full_area())
             notes.append(f"Drain {d.obj.label}: surcharged – travel time uses {v:.2f} m/s (the larger of the "
                          f"capacity velocity and Q/A_full) so downstream intensity is not understated; resize and rerun.")
         travel = d.length / v / 60.0 if v > 0 else 0.0
-        carried[k] = (ca, area, tc + travel)
-        dd = DrainDesign(d, ca, area, tc, i, q, n, st, travel)
-        dd.checks = _checks(dd, rules)
-        if dd.failed:
-            dd.alternatives = _alternatives(dd, rules)
+        carried[k] = (ca, area, tc + travel, ext)
+        dd = DrainDesign(d, ca, area, tc, i, q, n, st, travel, ext)
+        if not d.existing:                       # existing drains are assessed, not redesigned (existing.py)
+            dd.checks = _checks(dd, rules)
+            if dd.failed:
+                dd.alternatives = _alternatives(dd, rules)
         out.append(dd)
     res = DrainageDesignResult(METHOD, idf.source, return_period, out, general, errors)
-    res.notes = notes
+    res.notes = list(net.notes) + notes
+    if _assess_existing and not errors:
+        from . import existing as ex
+        ex.assess(net, res, rules, idf, return_period, area_type)
     return res
 
 

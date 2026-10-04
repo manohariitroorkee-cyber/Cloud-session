@@ -46,6 +46,40 @@ program also remembers your last drawing in this browser.
 
 To get your bearings, press **Load example** to see a finished design. **Undo** reverses that.
 
+## Rainwater drains next to existing drains and villages
+
+The drainage sheet treats what is already on the ground as fixed, and fits the new drains around it:
+
+* **Existing drain**: draw a drain or nallah that is already there. Enter its surveyed size, its bed
+  levels and the silt in it. It is never resized. The check reports:
+  * what it can carry today;
+  * the flow already in it;
+  * the **spare capacity today** (its residual capacity);
+  * how much the new areas add;
+  * the share of its capacity that will be used.
+
+  It also says how much desilting would gain.
+* **Village / built-up area**: draw a village or existing colony and enter the level of the mouth of
+  its drain. Its levels are never changed. The check makes sure the drain it flows into stays at least
+  0.15 m lower, so the village water still runs out. The 0.15 m is a project setting.
+* **Water arriving from outside the drawing**: enter this on a drain point if an upstream nallah
+  already brings water there. It is under *More options*.
+* **Outfall**: enter the bed level of the river or nallah, and its highest flood level if known. New
+  drains must not arrive below the bed. If the flood level is above the drain's water level, it is
+  reported as backwater.
+* **Ground levels from the survey**: *Add survey levels from a file* reads a CSV or text file. Each line
+  holds easting, northing and level in UTM 43N metres. Drain points left without a ground level then
+  take theirs from the survey.
+* **Design the new drains for me** proposes the size, bed levels and slope of every new drain. It uses:
+  * the ground levels;
+  * the storm chosen;
+  * the existing drains;
+  * the village drain mouths and the outfall.
+
+  Anything that cannot work, such as a new drain arriving below an existing drain's bed, is listed
+  under *Needs your decision*. The proposed values are marked *Suggested – check this*. Then press
+  *Check my design*.
+
 ## Handy keys
 
 | Key | What it does |

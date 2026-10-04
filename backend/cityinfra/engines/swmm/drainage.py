@@ -121,9 +121,14 @@ def build_inp(net: DrainageNetwork, rules: RuleContext, idf: IDF, return_period:
         d = net.drains[k]
         c = lmap.name(d.obj.id, d.obj.name)
         L.append(f"{c} {nmap.name(d.us.id, d.us.name)} {nmap.name(d.ds.id, d.ds.name)} {fnum(d.length, 3)} "
-                 f"{n_tab[d.lining]} {fnum(d.us_invert)} {fnum(d.ds_invert)} 0 0")
-        xs.append(f"{c} {_xsection(d.section)}")
+                 f"{n_tab[d.lining]} {fnum(d.us_invert + d.silt_m)} {fnum(d.ds_invert + d.silt_m)} 0 0")
+        xs.append(f"{c} {_xsection(d.flow_section)}")      # silt raises the bed of an existing drain
     L += ["", "[XSECTIONS]", ";Link Shape Geom1 Geom2 Geom3 Geom4 Barrels"] + xs
+    dwf = [f"{nmap.name(nid, n.name)} FLOW {fnum(float(n.attr('external_inflow_m3s')), 4)}"
+           for nid, n in net.nodes.items()
+           if n.kind == ObjectKind.DRAIN_NODE and n.attr("external_inflow_m3s")]
+    if dwf:
+        L += ["", "[DWF]", ";Node Constituent Baseline (inflow from outside the drawing, constant)"] + dwf
     L += ["", "[TIMESERIES]", ";Name Time Value"]
     for j, i in enumerate(hyeto):
         L.append(f"DESIGN_STORM {hm(j * step)[:-3]} {i:.4f}")

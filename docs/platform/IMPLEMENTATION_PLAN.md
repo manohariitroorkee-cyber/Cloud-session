@@ -20,6 +20,7 @@ Legend: **done** = implemented and tested · **partial** = foundation in place �
 | — | GIS frontend (MapLibre, drawing, snapping, measurement, undo/redo, layers, results on map) | pending | stage 2 |
 | — | Revisions: compare / rollback services | pending | schema ready; services stage 2 |
 | 11 | Storm-water drainage – hydraulic design | done | Catchments (composite C, Kirpich/inlet time), project IDF (power or table form, no default), Rational-method sheet with iterated time of concentration, circular/rectangular/trapezoidal/box sections, capacity, d/D, freeboard, velocities, return-period check, size alternatives; SWMM runoff + dynamic-wave routing with alternating-block design storm, flooding and surcharge |
+| 11a | Drainage around what exists | done | Existing drains: usable capacity of the silted section at design freeboard, flow today (existing catchments + recorded inflows), residual capacity, load added by the new areas, utilisation, desilting gain; village catchments at fixed levels (receiving water level vs drain-mouth level); outfall bed and flood level (backwater, gravity impossible); new drains arriving below existing beds; ground levels from survey points (TIN); recorded external inflows (also in SWMM as constant inflow, silt as raised bed). Proposed sizes, bed levels and slopes for new drains (`drainage/autodesign.py`) – proposals only, never written without the user |
 | 12 | Roads – alignment and curve design | done | Any shape drawn: PI polyline (simple, equal/unequal transitions, spiral–spiral, compound with or without transitions), element chain (hairpins > 180°, loops, S-curves through zero curvature), CAD polyline with arcs (kinks reported), freehand trace (tangents and radii fitted, reverse curves, deviation reported). Exact clothoid evaluation. Checks: R_min (incl. spiral–spiral), transition length for every change of curvature (centrifugal, run-off, empirical), missing transitions, broken-back, reverse-curve tangent, compound ratio, kinks; symmetric and unsymmetrical vertical curves with SSD and sag comfort; superelevation in sections; utility level coordination |
 | 12a | Junction design | done | Intersections (T, Y, cross, multi-leg): arm angles, kerb returns (simple or three-centred, fitted tangent to both carriageway edges), sight triangles (uncontrolled / priority) with obstruction search; roundabouts: inscribed circle, entry/exit kerb fillets, weaving lengths, Wardrop capacity within its validity range. Swept-path analysis and signal design pending |
 | 13 | Electrical distribution | done | Radial substation → HT cable → transformer → LT cable → feeder pillar/pole → load; demand factors and per-level diversity (P and Q), transformer loading, cable current with derating and parallel runs, three- and single-phase voltage drop cumulative from the source bus, cable-size / transformer-rating proposals, transformer, pillar, cable and load schedules. Cable data from a library file – the shipped library is SAMPLE data. Pending: short-circuit, protection, earthing, meshed-network load flow |
@@ -40,7 +41,25 @@ findings are fixed and covered by regression tests. See `AUDIT_2026-10-04.md`.
 * Structural (RCC) design of drains, culverts, chambers, manholes and any other structure.
 * Road earthwork and quantities (removed from the roads module with the above; can be reinstated on instruction).
 
-## Next stage: make it usable on a map
+## Next stage: one integrated model on a real map (requested 4 Oct 2026)
+
+Requested: one model for a new DDA area in which existing roads, sewers, water lines, drains,
+electricity and villages are drawn with the proposed sectors, designed against existing ground
+levels, natural drainage levels and outfalls, and coordinated in shared utility corridors.
+
+1. **Done (stage 11a):** drainage around existing drains, villages, outfalls and survey levels.
+2. One project sheet with all disciplines as layers (instead of one sheet per module); every check
+   run on the same model; existing/proposed shown on every object.
+3. Map background and import of the area's existing data (survey CSV, DXF/SHP of the master plan and
+   existing services, village abadi boundaries). The basemap provider and its licence are to be
+   confirmed for official use.
+4. Natural drainage from the ground surface: flow directions and ridge/valley lines from the survey,
+   to suggest catchment boundaries and drain routes.
+5. Corridors: cross-section of each road right-of-way with a slot for every service, and clash and
+   clearance checks where services cross (uses `z_min/z_max`).
+6. Sewer and water lines also checked against existing lines and their spare capacity.
+
+## Earlier plan: make it usable on a map
 
 1. `backend/cityinfra/db/` – psycopg repository: load/save `Project` ⇄ `eng_object_version`, revisions (create, freeze, diff, roll forward).
 2. FastAPI app: projects, objects (CRUD with SRID/kind validation), relationships, import (GeoJSON, DXF, SHP, KML/KMZ), vector tiles, sewer-design and SWMM jobs, EPANET jobs, results, reports; users and per-project rights.

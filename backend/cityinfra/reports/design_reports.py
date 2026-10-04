@@ -48,9 +48,22 @@ def drainage(project_name: str, res, rules: RuleContext, area_type: str, swmm=No
           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for d in res.drains:
         r = d.row()
+        r['drain'] += " (existing)" if d.drain.existing else ""
         L.append(f"| {r['drain']} | {r['from']} | {r['to']} | {r['length_m']} | {r['section']} | {r['slope_1_in']} | "
                  f"{r['area_ha']} | {r['ca_ha']} | {r['tc_min']} | {r['i_mm_h']} | {r['q_m3s']} | {r['q_cap_m3s']} | "
                  f"{r['depth_ratio']} | {r['velocity_ms']} | {r['result']} |")
+    if getattr(res, "existing", None):
+        L += ["", "## 3a. Existing drains – capacity and residual capacity", "",
+              "Usable capacity: Manning discharge of the section available today (bed raised by the recorded silt) at "
+              "the depth leaving the design freeboard. Flow today: existing catchments and recorded inflows only. "
+              "Residual = usable − flow today. Added = full design flow − flow today.", "",
+              "| Drain | Section | Silt (m) | Slope 1 in | Usable (m³/s) | Flow today (m³/s) | Residual (m³/s) | Added by new areas (m³/s) | Total (m³/s) | Used |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+        for a in res.existing:
+            r = a.row()
+            L.append(f"| {r['drain']} | {r['section']} | {r['silt_m']} | {r['slope_1_in']} | {r['q_usable_m3s']} | "
+                     f"{r['q_existing_m3s']} | {r['residual_m3s']} | {r['q_added_m3s']} | {r['q_total_m3s']} | "
+                     f"{r['utilisation_pct']} % |")
     L += ["", "## 4. Checks not passed", ""] + _failed(res.all_checks())
     alts = [(d.drain.obj.label, a) for d in res.failing for a in d.alternatives]
     if alts:

@@ -49,8 +49,8 @@ parameters:
     verification: requires_verification
 
   manning_n_drains:
-    value: {rcc: 0.015, hdpe: 0.011, upvc: 0.011, brick: 0.017, grass: 0.035}
+    value: {rcc: 0.015, hdpe: 0.011, upvc: 0.011, brick: 0.017, grass: 0.035, earth: 0.025}
     unit: s/m^(1/3)
     description: Manning's n by drain lining (design values)
-    source: {clause: "Ch. 5", note: "RCC 0.015 = design value incl. ageing; brick 0.015–0.017 and grass 0.030–0.035 – upper ends adopted"}
+    source: {clause: "Ch. 5", note: "RCC 0.015 = design value incl. ageing; brick 0.015–0.017 and grass 0.030–0.035 – upper ends adopted; earth (unlined existing nallahs) 0.025 – textbook value, to verify"}
     verification: requires_verification

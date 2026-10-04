@@ -134,6 +134,55 @@ def sample_drainage_project() -> Project:
     return pr
 
 
+def sample_drainage_with_existing() -> Project:
+    """A new sector draining into an existing earthen nallah that already carries a village's
+    rain and flow from upstream of the drawing.  Shows existing capacity, residual capacity,
+    the village outlet kept at its level and the receiving channel's flood level."""
+    pr = Project("New sector joining an existing nallah", crs_epsg=32643)
+    nd = {}
+    for name, (x, y, gl, st, extra) in {
+            "DN1": (0, 0, 216.5, "proposed", {}), "DN2": (120, 0, 216.2, "proposed", {}),
+            "DN3": (240, 0, 215.9, "proposed", {}),
+            "EX1": (400, 250, 215.8, "existing", {"external_inflow_m3s": 0.4}),
+            "EX2": (400, 0, 215.3, "existing", {})}.items():
+        nd[name] = pr.add(EngineeringObject(ObjectKind.DRAIN_NODE, _pt(x, y), name=name, status=st,
+                                            attributes={"ground_level": gl, **extra}))
+    nd["OF1"] = pr.add(EngineeringObject(ObjectKind.DRAIN_OUTFALL, _pt(400, -300), name="OF1", status="existing",
+                                         attributes={"ground_level": 214.4, "invert_level": 212.0,
+                                                     "tailwater_level": 212.6}))
+    cts = [("C1", _poly((-100, 10), (110, 10), (110, 160), (-100, 160)), "DN1", "proposed",
+            {"paved": 0.4, "roof": 0.35, "lawn_clay": 0.25}, 55, {}),
+           ("C2", _poly((110, 10), (230, 10), (230, 160), (110, 160)), "DN2", "proposed",
+            {"paved": 0.5, "roof": 0.3, "lawn_clay": 0.2}, 60, {}),
+           ("C3", _poly((230, -150), (390, -150), (390, -10), (230, -10)), "DN3", "proposed",
+            {"paved": 0.3, "roof": 0.3, "open_ground": 0.4}, 45, {}),
+           ("VILLAGE", _poly((300, 270), (520, 270), (520, 450), (300, 450)), "EX1", "existing",
+            {"roof": 0.5, "paved": 0.4, "lawn_clay": 0.1}, 90, {"levels_fixed": True, "outlet_level": 215.3})]
+    for name, geom, node, st, surf, imp, extra in cts:
+        c = pr.add(EngineeringObject(ObjectKind.CATCHMENT, geom, name=name, status=st, attributes={
+            "surfaces": surf, "impervious_pct": imp, "flow_length_m": 120, "overland_slope": 0.01, **extra}))
+        pr.relate(c, nd[node], RelationType.DRAINS_TO)
+    drains = [("D1", "DN1", "DN2", "proposed", {"shape": "circular", "diameter_mm": 900, "lining": "rcc",
+                                                "us_invert": 215.00, "ds_invert": 214.80}),
+              ("D2", "DN2", "DN3", "proposed", {"shape": "circular", "diameter_mm": 1000, "lining": "rcc",
+                                                "us_invert": 214.75, "ds_invert": 214.55}),
+              ("D3", "DN3", "EX2", "proposed", {"shape": "rectangular", "width_m": 1.2, "height_m": 1.0,
+                                                "lining": "rcc", "us_invert": 214.50, "ds_invert": 214.20}),
+              ("NALLAH-1", "EX1", "EX2", "existing", {"shape": "trapezoidal", "width_m": 1.5, "height_m": 1.2,
+                                                      "side_slope": 1.5, "lining": "earth", "us_invert": 214.40,
+                                                      "ds_invert": 213.90, "silt_depth_m": 0.25}),
+              ("NALLAH-2", "EX2", "OF1", "existing", {"shape": "trapezoidal", "width_m": 2.0, "height_m": 1.5,
+                                                      "side_slope": 1.5, "lining": "earth", "us_invert": 213.80,
+                                                      "ds_invert": 213.00, "silt_depth_m": 0.30})]
+    for name, a, b, st, attrs in drains:
+        ga, gb = nd[a].geometry["coordinates"], nd[b].geometry["coordinates"]
+        d = pr.add(EngineeringObject(ObjectKind.STORM_DRAIN, {"type": "LineString", "coordinates": [ga, gb]},
+                                     name=name, status=st, attributes=attrs))
+        pr.relate(d, nd[a], RelationType.UPSTREAM_NODE)
+        pr.relate(d, nd[b], RelationType.DOWNSTREAM_NODE)
+    return pr
+
+
 SAMPLE_ROAD_TEMPLATE = {
     "median": {"width": 1.2, "raised_m": 0.15},
     "strips": [

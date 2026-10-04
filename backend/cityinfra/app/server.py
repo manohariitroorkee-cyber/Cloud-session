@@ -8,6 +8,7 @@ Serves the page from ./static and a small JSON API:
     GET  /api/options              choice lists (cables, materials, …) from the rule sets
     GET  /api/example/<module>     a ready-made example drawing
     POST /api/check/<module>       {features, settings, name} → plain-language results
+    POST /api/design/drainage      {features, settings} → proposed sizes and levels for the new drains
     POST /api/report               {markdown, title} → printable HTML report
 It listens on this computer only (127.0.0.1).
 """
@@ -80,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             payload = json.loads(self.rfile.read(n) or b"{}")
+            if path == "/api/design/drainage":
+                return self._json(api.design_drainage(payload))
             if path.startswith("/api/check/"):
                 return self._json(api.check(path.rsplit("/", 1)[1], payload))
             if path == "/api/report":

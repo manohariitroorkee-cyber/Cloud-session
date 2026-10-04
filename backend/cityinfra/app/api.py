@@ -32,9 +32,11 @@ MODULES = [
      "steps": ["Place the water tank or source", "Place points where water is used",
                "Join them with pipes", "Tell us how many people use water at each point", "Press Check my design"]},
     {"id": "drainage", "title": "Rainwater drains", "icon": "rain",
-     "what": "Drains that carry rainwater away so streets do not flood.",
-     "steps": ["Place drain points and the outfall", "Join them with drains, in the direction the water flows",
-               "Draw the areas whose rain flows into each drain point", "Choose how heavy a storm to design for",
+     "what": "Drains that carry rainwater away so streets do not flood – fitted to existing drains, villages and the outfall.",
+     "steps": ["Place the outfall, and draw the existing drains and villages, if any",
+               "Place new drain points and join them with new drains, in the direction the water flows",
+               "Draw the areas whose rain flows into each drain point",
+               "Choose the storm, then press 'Design the new drains for me' (or enter sizes yourself)",
                "Press Check my design"]},
     {"id": "road", "title": "Roads", "icon": "road",
      "what": "The road's path, its bends and its up-and-down slopes, checked for safe driving.",
@@ -99,7 +101,7 @@ def options() -> dict[str, Any]:
 def example(module: str) -> dict[str, Any]:
     from .. import samples
     pr = {"sewer": samples.sample_sewer_project, "water": samples.sample_water_project,
-          "drainage": samples.sample_drainage_project, "road": samples.sample_road_project,
+          "drainage": samples.sample_drainage_with_existing, "road": samples.sample_road_project,
           "junction": samples.sample_junction_project, "electrical": samples.sample_electrical_project}[module]()
     settings: dict[str, Any] = {}
     if module == "drainage":
@@ -299,6 +301,19 @@ def _check_drainage(pr, rules, settings, problems):
         values[d.drain.obj.id] = {"Rain water flow (m³/s)": round(d.flow, 3), "Area draining here (ha)": round(d.area_ha, 2),
                                   "Water speed (m/s)": round(s.velocity, 2) if s.capacity_ok else "overfull",
                                   "Can carry (m³/s)": round(s.q_capacity, 3)}
+    overlays = []
+    for a in res.existing:
+        oid = a.drain.obj.id
+        values[oid] = {"Can carry now (m³/s)": round(a.q_usable, 3),
+                       **({"Could carry if desilted (m³/s)": round(a.q_desilted, 3)} if a.q_desilted else {}),
+                       "Flow today (m³/s)": round(a.q_existing, 3), "Spare capacity today (m³/s)": round(a.residual, 3),
+                       "Added by the new areas (m³/s)": round(a.added, 3), "Total after (m³/s)": round(a.q_total, 3),
+                       "Share of capacity used": f"{100 * a.utilisation:.0f} %"}
+        cs = a.drain.obj.geometry["coordinates"]
+        mid = [(cs[0][0] + cs[-1][0]) / 2, (cs[0][1] + cs[-1][1]) / 2]
+        overlays.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": mid},
+                         "properties": {"kind": "capacity_label",
+                                        "text": f"spare today {a.residual:.2f} · after {a.q_usable - a.q_total:.2f} m³/s"}})
     for c in net.catchments:
         values[c.obj.id] = {"Area (ha)": round(c.area_ha, 3), "Runoff share C": round(c.c, 2), "Time to reach drain (min)": round(c.tc_min, 1)}
     swmm = None
@@ -317,7 +332,7 @@ def _check_drainage(pr, rules, settings, problems):
             notes.append(_engine_note(e, "storm"))
         except EngineError as e:
             notes.append(f"The storm simulation needs more information: {e}")
-    return _finish("drainage", pr, res.all_checks(), errors, notes, fixes, values, [],
+    return _finish("drainage", pr, res.all_checks(), errors, notes, fixes, values, overlays,
                    report(pr.name, res, rules, area, swmm), rules, extra)
 
 
@@ -344,6 +359,23 @@ def _plain_road_error(msg: str) -> str:
             out = text.format(*g).replace(" ()", "")
             return prefix + out.replace("(largest radius", "(Largest radius that fits").replace("if the neighbouring curve is also reduced", "if the next curve is also made smaller").replace("; largest radius at", "; at")
     return m0
+
+
+def design_drainage(payload: dict) -> dict[str, Any]:
+    """Proposed sizes and levels for the new drains (nothing is changed until the user accepts)."""
+    from ..engineering.drainage.autodesign import propose
+    settings = payload.get("settings") or {}
+    pr, problems = _project(payload)
+    if pr is None:
+        return {"drains": {}, "issues": problems, "notes": []}
+    rules = _rules("drainage", settings)
+    idf, synthetic = _idf(settings)
+    try:
+        p = propose(pr, rules, idf, float(settings.get("return_period", 5)))
+    except (KeyError, ValueError) as e:
+        return {"drains": {}, "issues": problems + [str(e)], "notes": []}
+    notes = p.notes + (["The EXAMPLE rainfall was used – enter real rainfall figures for an actual design."] if synthetic else [])
+    return {"drains": p.drains, "issues": problems + p.issues, "notes": notes}
 
 
 def _check_road(pr, rules, settings, problems):

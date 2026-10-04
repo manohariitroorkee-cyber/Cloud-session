@@ -9,6 +9,7 @@
 (() => {
 const EPSG = 32643, E0 = 704000, N0 = 3193000;
 const SVGNS = 'http://www.w3.org/2000/svg';
+const EXISTING = '#6b5a2a', VILLAGE = '#c0712b';
 
 // ------------------------------------------------------------------ small helpers
 const $ = (s, r = document) => r.querySelector(s);
@@ -52,7 +53,7 @@ const WORDS = {
   streetlight: 'Street lights', pumping: 'Water pump', ev_charging: 'Electric vehicle charging',
   plain: 'Flat land', rolling: 'Gently hilly land', mountainous: 'Hills', steep: 'Very steep hills',
   car: 'Cars only', bus: 'Buses', truck: 'Trucks', semi_trailer: 'Long trailer trucks',
-  circular: 'Round pipe', rectangular: 'Box drain (rectangular)', trapezoidal: 'Open channel with sloping sides',
+  earth: 'Earth (unlined)', circular: 'Round pipe', rectangular: 'Box drain (rectangular)', trapezoidal: 'Open channel with sloping sides',
 };
 const word = v => WORDS[v] || pretty(v);
 
@@ -126,22 +127,33 @@ kind('water_pipe', { label: 'Water pipe', geom: 'link', prefix: 'W', colour: '#1
   fields: [num('diameter_mm', 'Pipe size', 'Inside diameter of the pipe in millimetres.', 'mm', { req: true }),
     num('roughness', 'Pipe smoothness (C value)', 'Hazen-Williams C: about 140 for new plastic, 130 for new ductile iron, 100 for old pipes.', '', { req: true })] });
 
+const hasSurvey = () => S.feats.filter(f => f.kind === 'terrain_point').length >= 3;
+const STATUS_FIELD = sel('status', 'Already there, or new?', 'Existing things are surveyed facts: they are checked for how much more they can take, but never resized.',
+  () => [['proposed', 'New – to be designed'], ['existing', 'Already there (surveyed)']],
+  { get: f => f.a.status || 'proposed', set: (f, v) => { if (v === 'existing') f.a.status = 'existing'; else delete f.a.status; } });
+const groundHelp = levelHelp + ' Leave empty if you have added survey points around it – it is then worked out from them.';
 kind('drain_node', { label: 'Drain point', geom: 'point', prefix: 'DN', colour: '#12857a', shape: 'square',
-  fields: [num('ground_level', 'Ground level', levelHelp, 'm', { req: true })] });
+  fields: [STATUS_FIELD, num('ground_level', 'Ground level', groundHelp, 'm', { req: () => !hasSurvey() }),
+    num('external_inflow_m3s', 'Water arriving from outside the drawing', 'Flow that already comes into the drain here from areas not drawn (for example an upstream nallah), from records or a separate study. Leave empty if none.', 'm³/s', { advanced: true })] });
 kind('drain_outfall', { label: 'Drain outfall', geom: 'point', prefix: 'OF', colour: '#12857a', shape: 'tri',
-  fields: [num('ground_level', 'Ground level', levelHelp, 'm', { req: true }),
-    num('invert_level', 'Drain bottom level where it leaves', 'Level of the bottom of the drain where it empties into the river, nala or bigger drain.', 'm', { req: true })] });
+  fields: [STATUS_FIELD, num('ground_level', 'Ground level', groundHelp, 'm', { req: () => !hasSurvey() }),
+    num('invert_level', 'Bed level of the receiving channel here', 'Level of the bottom of the river, nallah or bigger drain where the water is let out. The drain must not arrive below it.', 'm', { req: true }),
+    num('tailwater_level', 'Highest flood level of the river or nallah here', 'The highest water level of the receiving channel during floods (HFL), from records. Leave empty if not known; the check then assumes it flows out freely.', 'm')] });
 kind('storm_drain', { label: 'Drain', geom: 'link', prefix: 'D', colour: '#12857a', from: ['drain_node'], to: ['drain_node', 'drain_outfall'],
-  fields: [sel('shape', 'Type of drain', 'A round pipe, a box drain, or an open channel with sloping sides.', () => ['circular', 'rectangular', 'trapezoidal'].map(v => [v, word(v)]), { req: true }),
+  fields: [STATUS_FIELD, sel('shape', 'Type of drain', 'A round pipe, a box drain, or an open channel with sloping sides.', () => ['circular', 'rectangular', 'trapezoidal'].map(v => [v, word(v)]), { req: true }),
     sel('diameter_mm', 'Pipe size', 'Inside diameter of the round pipe.', () => OPT.drain_diameters_mm.map(d => [d, d + ' mm']), { req: true, num: true, show: f => (f.a.shape || 'circular') === 'circular' }),
     num('width_m', 'Width at the bottom', 'Inside width of the drain at its bottom.', 'm', { req: true, show: f => ['rectangular', 'trapezoidal'].includes(f.a.shape) }),
     num('height_m', 'Depth', 'Inside depth of the drain.', 'm', { req: true, show: f => ['rectangular', 'trapezoidal'].includes(f.a.shape) }),
     num('side_slope', 'Side slope (across : up)', 'How much the side leans: 1 means 1 m across for every 1 m up.', '', { req: true, show: f => f.a.shape === 'trapezoidal' }),
     sel('lining', 'Drain material', 'What the drain is made of or lined with.', () => OPT.drain_linings.map(m => [m, word(m)]), { req: true }),
-    num('us_invert', 'Bottom level at the start', 'Level of the inside bottom at the upper end. Use "Fill in drain levels for me" if you are not sure.', 'm', { req: true }),
-    num('ds_invert', 'Bottom level at the end', 'Level of the inside bottom at the lower end. It must be lower than the start.', 'm', { req: true })] });
+    num('silt_depth_m', 'Silt lying in it now', 'Depth of silt on the bed of the existing drain, from the site survey. It reduces what the drain can carry today.', 'm', { show: f => f.a.status === 'existing' && (f.a.shape || 'circular') !== 'circular' }),
+    num('us_invert', 'Bottom level at the start', 'Level of the inside bottom (bed) at the upper end. For new drains, "Design the new drains for me" fills this in.', 'm', { req: true }),
+    num('ds_invert', 'Bottom level at the end', 'Level of the inside bottom (bed) at the lower end. It must be lower than the start.', 'm', { req: true })] });
 kind('catchment', { label: 'Rain area', geom: 'area', prefix: 'C', colour: '#12857a',
-  fields: [sel('ui_mix', 'What covers this area', 'Roofs and paving send most rain into the drains; gardens and parks soak up more.',
+  fields: [STATUS_FIELD,
+    { key: 'levels_fixed', type: 'check', label: 'Village or built-up area – its levels must not change', help: 'Tick for a village or existing colony. The new drains must then take its water at the level of its present drain mouth, without raising or lowering anything in it.' },
+    num('outlet_level', 'Level of the mouth of its drain', 'Bed level where the village drain now lets its water out (from the survey). The receiving drain\u2019s water must stay below this.', 'm', { req: true, show: f => !!f.a.levels_fixed }),
+    sel('ui_mix', 'What covers this area', 'Roofs and paving send most rain into the drains; gardens and parks soak up more.',
       f => [...Object.entries(SURFACE_MIX).map(([k, m]) => [k, m.label]), ...(mixOf(f.a.surfaces) === 'file' ? [['file', 'Mix given in the file']] : [])],
       { req: true, get: f => mixOf(f.a.surfaces), set: (f, v) => { if (SURFACE_MIX[v]) { f.a.surfaces = clone(SURFACE_MIX[v].surfaces);
         f.a.impervious_pct = Math.round(100 * ((f.a.surfaces.roof || 0) + (f.a.surfaces.paved || 0))); } }, sugKey: 'surfaces' }),
@@ -190,10 +202,31 @@ const KIND_HELP = {
   electrical_load: 'Place a building that uses electricity.',
   electrical_cable: 'Draw a cable: click where the power comes from, then where it goes to.',
 };
+// tools that draw an object of an existing kind with a different starting point
+const VARIANTS = {
+  existing_drain: { kind: 'storm_drain', label: 'Existing drain', sub: 'Already there: enter its survey', prefix: 'ED',
+    help: 'Draw a drain or nallah that is already there: click its upper drain point, then the lower one. Enter its surveyed size, bed levels and silt; it is checked for how much more water it can take.',
+    preset: f => { f.a.status = 'existing'; for (const k of Object.keys(f.sug)) delete f.a[k]; f.sug = {};
+      sug(f, 'shape', 'trapezoidal'); sug(f, 'width_m', 1.5); sug(f, 'height_m', 1.2); sug(f, 'side_slope', 1.5); sug(f, 'lining', 'earth'); sug(f, 'silt_depth_m', 0); } },
+  village: { kind: 'catchment', label: 'Village / built-up area', sub: 'Its levels stay as they are', prefix: 'V',
+    help: 'Draw a village or existing colony: click around its edge, double-click to finish, then click the drain point its water goes to. Then enter the level of the mouth of its drain.',
+    preset: f => { f.a.status = 'existing'; f.a.levels_fixed = true; f.a.surfaces = clone(SURFACE_MIX.built.surfaces); f.a.impervious_pct = 90; f.sug.surfaces = 1; } },
+};
+const kindOf = t => (VARIANTS[t] ? VARIANTS[t].kind : t);
+function makeObject(tool, geom) {
+  const v = VARIANTS[tool], f = newObject(kindOf(tool), geom);
+  if (v) { v.preset(f); f.name = nextNamePrefix(v.prefix); }
+  return f;
+}
+function nextNamePrefix(pre) {
+  let n = 1;
+  for (const f of S.feats) { const m = f.name && f.name.startsWith(pre) && /^\d+$/.test(f.name.slice(pre.length)) && +f.name.slice(pre.length); if (m && m >= n) n = m + 1; }
+  return pre + n;
+}
 const TOOLS = {
   sewer: ['manhole', 'sewer_outfall', 'sewer_pipe'],
   water: ['reservoir', 'water_junction', 'water_pipe'],
-  drainage: ['drain_node', 'drain_outfall', 'storm_drain', 'catchment'],
+  drainage: ['drain_node', 'drain_outfall', 'storm_drain', 'catchment', 'existing_drain', 'village'],
   road: ['road_alignment', 'manhole'],
   junction: ['road_junction', 'plot'],
   electrical: ['substation', 'transformer', 'feeder_pillar', 'electrical_load', 'electrical_cable'],
@@ -464,6 +497,7 @@ function fillLevels(linkKind, cover, slope1in) {
 }
 
 // ------------------------------------------------------------------ what is still missing
+const isReq = d => (typeof d.req === 'function' ? d.req() : !!d.req);
 function fieldsOf(f) { return (KINDS[f.kind] || {}).fields || []; }
 function getVal(f, d) { return d.get ? d.get(f) : f.a[d.key]; }
 function missing() {
@@ -471,7 +505,7 @@ function missing() {
   const add = (f, what) => out.push({ f, what });
   for (const f of S.feats) {
     const K = KINDS[f.kind]; if (!K || K.passive) continue;
-    for (const d of fieldsOf(f)) if (d.req && (!d.show || d.show(f)) && empty(getVal(f, d))) add(f, d.label);
+    for (const d of fieldsOf(f)) if (isReq(d) && (!d.show || d.show(f)) && empty(getVal(f, d))) add(f, d.label);
     if (K.geom === 'link') {
       if (!byName(f.a.from) || !byName(f.a.to)) add(f, 'Both ends must be joined to points');
     }
@@ -568,8 +602,9 @@ function draw() {
       const pts = ptsAttr(f.g.coordinates[0]);
       const hh = halo(f.id, () => s('polygon', { points: pts, fill: 'none', 'stroke-width': 9, opacity: op }));
       if (hh) layers.area.append(hh);
-      const poly = s('polygon', { points: pts, 'data-id': f.id, class: 'obj', fill: K.colour, 'fill-opacity': f.kind === 'plot' ? 0.35 : 0.13,
-        stroke: selected ? 'var(--sign)' : K.colour, 'stroke-width': selected ? 3 : 1.6, 'stroke-dasharray': f.kind === 'catchment' ? '6 4' : null });
+      const col = f.a.levels_fixed ? VILLAGE : K.colour;
+      const poly = s('polygon', { points: pts, 'data-id': f.id, class: 'obj', fill: col, 'fill-opacity': f.kind === 'plot' ? 0.35 : f.a.levels_fixed ? 0.2 : 0.13,
+        stroke: selected ? 'var(--sign)' : col, 'stroke-width': selected ? 3 : 1.6, 'stroke-dasharray': f.kind === 'catchment' && !f.a.levels_fixed ? '6 4' : null });
       layers.area.append(poly);
       const c = centroid(f.g.coordinates[0]);
       layers.label.append(label(sx(c[0]), sy(c[1]), f.name || '', 'middle'));
@@ -592,7 +627,8 @@ function draw() {
         const hh = halo(f.id, () => s('polyline', { points: pts, fill: 'none', 'stroke-width': 11, opacity: op }));
         if (hh) layers.link.append(hh);
         layers.link.append(s('polyline', { points: pts, fill: 'none', stroke: 'transparent', 'stroke-width': 14, class: 'obj', 'data-id': f.id }));
-        layers.link.append(s('polyline', { points: pts, fill: 'none', stroke: selected ? 'var(--sign)' : K.colour, 'stroke-width': selected ? 4.5 : 3, 'pointer-events': 'none' }));
+        const ex = f.a.status === 'existing';
+        layers.link.append(s('polyline', { points: pts, fill: 'none', stroke: selected ? 'var(--sign)' : ex ? EXISTING : K.colour, 'stroke-width': selected ? 4.5 : ex ? 5 : 3, 'stroke-dasharray': ex ? '10 5' : null, 'pointer-events': 'none' }));
         const a = P(cs[0]), b = P(cs[cs.length - 1]);
         const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
         if (dist(a, b) > 30) layers.link.append(s('path', { d: 'M-6 -5L5 0L-6 5Z', fill: selected ? 'var(--sign)' : K.colour, transform: `translate(${mx},${my}) rotate(${ang})`, 'pointer-events': 'none' }));
@@ -757,7 +793,7 @@ function segDist(p, a, b) {
 }
 
 function click(p, w, t, e) {
-  const tool = S.tool, K = KINDS[tool];
+  const tool = S.tool, K = KINDS[kindOf(tool)];
   const hit = t && t.dataset.id ? byId(t.dataset.id) : null;
   if (S.draft && S.draft.type === 'pick') {
     const c = byId(S.draft.for);
@@ -768,7 +804,7 @@ function click(p, w, t, e) {
   if (tool === 'select') { if (!hit) select(null); return; }
   if (!K) return;
   if (K.geom === 'point') {
-    const f = newObject(tool, { type: 'Point', coordinates: w });
+    const f = makeObject(tool, { type: 'Point', coordinates: w });
     edit(() => S.feats.push(f)); S.sel = f.id; sideSoon();
     say(`${K.label} ${f.name} placed. Fill in its details on the right, or click again to place another.`);
     return;
@@ -781,9 +817,9 @@ function click(p, w, t, e) {
     }
     const a = byId(S.draft.from);
     if (hit && hit.id !== a.id && K.to.includes(hit.kind)) {
-      if (S.feats.some(l => l.kind === tool && ((l.a.from === a.name && l.a.to === hit.name) || (l.a.from === hit.name && l.a.to === a.name))))
+      if (S.feats.some(l => l.kind === K.id && ((l.a.from === a.name && l.a.to === hit.name) || (l.a.from === hit.name && l.a.to === a.name))))
         return say(`${a.name} and ${hit.name} are already joined.`);
-      const f = newObject(tool, { type: 'LineString', coordinates: [a.g.coordinates.slice(0, 2), hit.g.coordinates.slice(0, 2)] });
+      const f = makeObject(tool, { type: 'LineString', coordinates: [a.g.coordinates.slice(0, 2), hit.g.coordinates.slice(0, 2)] });
       f.a.from = a.name; f.a.to = hit.name;
       if (tool === 'electrical_cable') {
         const ht = a.kind === 'substation';
@@ -818,14 +854,14 @@ function finishArea(pts) {
   const tool = S.draft.kind; S.draft = null;
   if (pts.length < 3) { hint(); draw(); return say('An area needs at least three corners.'); }
   const ring = pts.map(p => [p[0], p[1]]); ring.push(ring[0].slice());
-  const f = newObject(tool, { type: 'Polygon', coordinates: [ring] });
+  const f = makeObject(tool, { type: 'Polygon', coordinates: [ring] });
   edit(() => S.feats.push(f)); S.sel = f.id; sideSoon();
-  if (tool === 'catchment') {
+  if (kindOf(tool) === 'catchment') {
     const nodes = S.feats.filter(x => x.kind === 'drain_node');
     if (nodes.length === 1) { f.a.drains_to = nodes[0].name; say(`Rain area ${f.name} drawn; its rain goes to ${nodes[0].name}.`); }
     else if (nodes.length) { S.draft = { type: 'pick', for: f.id }; say(`Rain area ${f.name} drawn. Now click the drain point its rain flows to.`, true); }
     else say(`Rain area ${f.name} drawn. Place a drain point, then choose it on the right under "Rain from here goes to".`);
-  } else say(`${KINDS[tool].label} ${f.name} drawn.`);
+  } else say(`${KINDS[kindOf(tool)].label} ${f.name} drawn.`);
   hint(); draw();
 }
 
@@ -868,17 +904,18 @@ function rename(f, n) {
 }
 
 // ------------------------------------------------------------------ hint over the sheet
+const toolHelp = k => (VARIANTS[k] ? VARIANTS[k].help : KIND_HELP[k]);
 function hint() {
   const el = $('#hint'); el.replaceChildren();
   const d = S.draft, K = KINDS[S.tool];
   let msg = '', btns = [];
   if (d && d.type === 'pick') msg = 'Now click the drain point where this area’s rain goes.';
-  else if (d && d.type === 'link') msg = `Now click where the ${KINDS[d.kind].label.toLowerCase()} goes to. Esc stops.`;
+  else if (d && d.type === 'link') msg = `Now click where the ${KINDS[kindOf(d.kind)].label.toLowerCase()} goes to. Esc stops.`;
   else if (d && d.type === 'road') { msg = `${d.pts.length} point(s). Click to add bends; double-click or press Finish when done.`;
     btns = [h('button', { class: 'btn primary', onclick: () => finishRoad(S.draft.pts, false), 'data-help': 'Finish the road at the last point you clicked (same as double-click or Enter).' }, 'Finish road')]; }
   else if (d && d.type === 'area') { msg = `${d.pts.length} corner(s). Click around the edge; double-click or press Finish when done.`;
     btns = [h('button', { class: 'btn primary', onclick: () => finishArea(dedupe(S.draft.pts)), 'data-help': 'Close the area using the corners you clicked (same as double-click or Enter).' }, 'Finish area')]; }
-  else if (K) msg = KIND_HELP[S.tool];
+  else if (K || VARIANTS[S.tool]) msg = toolHelp(S.tool);
   else if (!S.feats.length) msg = 'The sheet is empty. Choose a tool and click on the sheet – or press Load example at the top to see a finished one.';
   else if (S.results && !S.stale) msg = 'Rings show the result: red = problem, amber = check this, green = OK. Click an item to see why.';
   else msg = 'Click an item to see or change its details. Drag empty space to move around; use the mouse wheel to zoom.';
@@ -893,6 +930,8 @@ const ICON = {
 };
 function toolIcon(k) {
   if (ICON[k]) return `<svg viewBox="0 0 28 28">${ICON[k]}</svg>`;
+  if (k === 'existing_drain') return `<svg viewBox="0 0 28 28"><circle cx="5" cy="22" r="3.5" fill="${EXISTING}"/><circle cx="23" cy="6" r="3.5" fill="${EXISTING}"/><path d="M5 22L23 6" stroke="${EXISTING}" stroke-width="3.5" stroke-dasharray="4 3"/></svg>`;
+  if (k === 'village') return `<svg viewBox="0 0 28 28"><path d="M4 9l10-5 10 7-3 12H7z" fill="${VILLAGE}" fill-opacity=".3" stroke="${VILLAGE}" stroke-width="2"/><path d="M10 18v-4l3-3 3 3v4z" fill="${VILLAGE}"/></svg>`;
   const K = KINDS[k];
   if (K.geom === 'link') return `<svg viewBox="0 0 28 28"><circle cx="5" cy="22" r="3.5" fill="${K.colour}"/><circle cx="23" cy="6" r="3.5" fill="${K.colour}"/><path d="M5 22L23 6" stroke="${K.colour}" stroke-width="3"/></svg>`;
   if (K.geom === 'area') return `<svg viewBox="0 0 28 28"><path d="M4 9l10-5 10 7-3 12H7z" fill="${K.colour}" fill-opacity=".25" stroke="${K.colour}" stroke-width="2" stroke-dasharray="${k === 'plot' ? '' : '4 2'}"/></svg>`;
@@ -906,10 +945,11 @@ function renderTools() {
   for (const k of ids) {
     const isSel = k === 'select';
     const b = h('button', { class: 'tool', 'aria-pressed': String(S.tool === k), 'data-tool': k,
-      'data-help': isSel ? 'Choose and move things: click an item to see its details, drag a point to move it, double-click a road to add a bend.' : KIND_HELP[k],
+      'data-help': isSel ? 'Choose and move things: click an item to see its details, drag a point to move it, double-click a road to add a bend.' : toolHelp(k),
       onclick: () => setTool(k) });
     b.innerHTML = toolIcon(k);
-    b.append(h('span', {}, h('b', { text: isSel ? 'Choose / move' : KINDS[k].label }), h('small', { text: isSel ? 'Click or drag items' : TOOL_SUB[k] })));
+    const v = VARIANTS[k];
+    b.append(h('span', {}, h('b', { text: isSel ? 'Choose / move' : v ? v.label : KINDS[k].label }), h('small', { text: isSel ? 'Click or drag items' : v ? v.sub : TOOL_SUB[k] })));
     box.append(b);
   }
   box.append(h('h4', { text: 'Change' }),
@@ -921,7 +961,7 @@ function renderTools() {
 function setTool(k) {
   S.tool = k; S.draft = null;
   renderTools(); hint(); draw();
-  if (k !== 'select') say(KIND_HELP[k], true);
+  if (k !== 'select') say(toolHelp(k), true);
 }
 
 // ------------------------------------------------------------------ side panel
@@ -943,7 +983,8 @@ function stepsDone() {
   switch (S.module) {
     case 'sewer': return [has('manhole'), has('sewer_outfall'), has('sewer_pipe'), has('manhole') && every('manhole', f => +f.a.population > 0), checked];
     case 'water': return [has('reservoir'), has('water_junction'), has('water_pipe'), has('water_junction') && every('water_junction', f => !empty(f.a.people) || !empty(f.a.demand_lps)), checked];
-    case 'drainage': return [has('drain_node') && has('drain_outfall'), has('storm_drain'), has('catchment'), !!S.settings.ui_storm_set, checked];
+    case 'drainage': return [has('drain_outfall'), S.feats.some(f => f.kind === 'storm_drain' && f.a.status !== 'existing'), has('catchment'),
+      S.feats.some(f => f.kind === 'storm_drain' && f.a.status !== 'existing') && S.feats.filter(f => f.kind === 'storm_drain').every(f => !empty(f.a.us_invert) && !empty(f.a.ds_invert)), checked];
     case 'road': return [has('road_alignment'), has('road_alignment'), has('road_alignment') && every('road_alignment', f => !f.sug.design_speed_kmh), checked];
     case 'junction': return [has('road_junction'), has('road_junction') && every('road_junction', f => !f.sug.arms || f.a.ui_layout !== 'cross' || !!f.a.ui_layout_chosen), has('road_junction'), checked];
     case 'electrical': return [has('substation') && has('transformer') && has('electrical_load'), has('electrical_cable'), has('electrical_load') && every('electrical_load', f => !empty(f.a.connected_load_kw)), checked];
@@ -1028,8 +1069,82 @@ function settingsPanel(box) {
       src.onchange = () => edit(() => { st.ui_rain_source = src.value; });
       box.append(setting('src', 'Where the figures come from', 'For example "IMD Delhi (Safdarjung) 1990–2020". It is printed on the report.', src));
     }
-    levelsHelper('storm_drain', 'Drain');
+    box.append(h('h3', { text: 'Sizes and levels of the new drains' }),
+      h('p', { class: 'note', text: 'Works out the size, bed levels and slope of every NEW drain from the ground levels, the storm chosen above, '
+        + 'the existing drains, the villages\u2019 drain mouths and the outfall. Existing drains are never changed. Undo brings back what was there.' }),
+      h('button', { class: 'btn primary', onclick: designDrains, 'data-help': 'Propose sizes and levels for all new drains. They are filled in and marked "Suggested – check this"; problems that need your decision are listed.' }, 'Design the new drains for me'));
   }
+  if (m === 'drainage' || m === 'road') surveyPanel(box);
+}
+function surveyPanel(box) {
+  const n = S.feats.filter(f => f.kind === 'terrain_point').length;
+  const inp = h('input', { type: 'file', accept: '.csv,.txt,.xyz', hidden: true });
+  inp.onchange = () => { const file = inp.files[0]; if (file) importSurvey(file); inp.value = ''; };
+  box.append(h('h3', { text: 'Ground levels from the survey' }),
+    h('p', { class: 'note', text: n ? `${n} survey points on the drawing. Points without a ground level take it from them.`
+      : 'Add the surveyed spot levels (a text or CSV file with easting, northing and level on each line, in UTM 43N metres). Then you need not type the ground level at every point.' }),
+    inp,
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', onclick: () => inp.click(), 'data-help': 'Read spot levels from a CSV or text file: each line easting, northing, level (a point name in front is allowed). Coordinates in UTM zone 43N metres.' }, 'Add survey levels from a file'),
+      n ? h('button', { class: 'btn', onclick: () => edit(() => { S.feats = S.feats.filter(f => f.kind !== 'terrain_point'); }), 'data-help': 'Remove all survey points from the drawing. Undo brings them back.' }, 'Remove survey points') : ''));
+}
+function importSurvey(file) {
+  const rd = new FileReader();
+  rd.onload = () => {
+    const pts = [], bad = [];
+    String(rd.result).split(/\r?\n/).forEach((line, i) => {
+      const nums = line.split(/[,;\s]+/).filter(t => t !== '').map(Number).filter(x => isFinite(x));
+      if (nums.length < 3) return;
+      const [E, N, Z] = nums.slice(-3);
+      if (Math.abs(E) <= 180 && Math.abs(N) <= 90) bad.push(i + 1);
+      else if (E > 100000 && E < 900000 && N > 1000000) pts.push([E, N, Z]);
+      else bad.push(i + 1);
+    });
+    if (!pts.length) return say(bad.length ? 'The file looks like longitude/latitude or another coordinate system. Convert it to UTM zone 43N (EPSG:32643) metres first.' : 'No levels found. Each line needs easting, northing and level.', true);
+    edit(() => { for (const c of pts) S.feats.push({ id: uid(), kind: 'terrain_point', name: null, g: { type: 'Point', coordinates: c }, a: {}, sug: {} }); });
+    if (!S.feats.some(f => f.kind !== 'terrain_point')) fit();
+    say(`${pts.length} survey levels added` + (bad.length ? `; ${bad.length} line(s) skipped (not UTM 43N metres).` : '.'), true);
+  };
+  rd.readAsText(file);
+}
+async function designDrains() {
+  const miss = missing().filter(m => !(m.f && m.f.kind === 'storm_drain' && m.f.a.status !== 'existing'));
+  if (miss.length) { renderResults(miss); return say('Fill in the details listed first – sizes and levels of new drains are not needed.'); }
+  say('Working out sizes and levels…', true);
+  // new drains need no size yet: send them with whatever they have
+  try {
+    const p = await api('/api/design/drainage', { features: toFC(true), settings: payloadSettings(), name: S.name });
+    const keys = ['shape', 'diameter_mm', 'width_m', 'height_m', 'side_slope', 'closed', 'lining', 'us_invert', 'ds_invert'];
+    edit(() => {
+      for (const [id, rec] of Object.entries(p.drains)) {
+        const f = byId(id); if (!f) continue;
+        for (const k of ['diameter_mm', 'width_m', 'height_m', 'side_slope', 'closed']) if (!(k in rec)) { delete f.a[k]; delete f.sug[k]; }
+        for (const k of keys) if (k in rec) sug(f, k, rec[k]);
+      }
+      S.results = null;
+    });
+    S.proposal = p; S.stale = false; renderResults(); draw(); renderSide();
+    say(`Sizes and levels proposed for ${Object.keys(p.drains).length} new drain(s)` + (p.issues.length ? ` – ${p.issues.length} point(s) need your decision.` : '. Press Check my design to check them.'), true);
+  } catch (e) { say('The proposal could not be made: ' + e.message, true); }
+}
+function renderProposal(box) {
+  const p = S.proposal, rows = Object.entries(p.drains);
+  const size = r => r.diameter_mm ? `Ø ${r.diameter_mm} mm pipe` : `${r.width_m} × ${r.height_m} m ${r.closed ? 'box' : 'open'}${r.side_slope ? ' (sloping sides)' : ''}`;
+  box.replaceChildren(
+    h('div', { class: 'res-head' }, signal(p.issues.length ? 'warning' : 'pass'),
+      h('div', {}, h('h2', { text: `Proposed sizes and levels for ${rows.length} new drain(s)` }),
+        h('div', { class: 'counts', text: 'Filled in on the drawing and marked "Suggested – check this". Press Check my design to check the whole network.' })),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn primary', onclick: runCheck, 'data-help': 'Check the whole network with these sizes and levels.' }, 'Check my design'),
+      h('button', { class: 'btn', onclick: closeResults, 'data-help': 'Hide this panel. The proposed values stay on the drawing.' }, 'Close')),
+    p.issues.length ? h('div', { class: 'errors' }, h('h3', { text: 'Needs your decision' }), h('ul', {}, p.issues.map(t => h('li', { text: t })))) : '',
+    p.notes.length ? h('div', { class: 'notes' }, p.notes.map(t => h('p', { class: 'note', text: t }))) : '',
+    h('table', { class: 'arms', style: 'margin-top:10px' },
+      h('tr', {}, ['Drain', 'Size', 'Bed at start (m)', 'Bed at end (m)', 'Slope 1 in', 'Flow (m³/s)', 'Speed (m/s)', 'Depth below ground start / end (m)', 'Note'].map(t => h('th', { text: t }))),
+      rows.map(([id, r]) => h('tr', {}, h('td', {}, byId(id) ? h('button', { class: 'btn', onclick: () => select(id), 'data-help': 'Show this drain on the drawing.' }, byId(id).name) : '?'),
+        h('td', { text: size(r) }), h('td', { text: fmt(r.us_invert) }), h('td', { text: fmt(r.ds_invert) }), h('td', { text: String(r.slope_1_in) }),
+        h('td', { text: fmt(r.flow_m3s) }), h('td', { text: fmt(r.velocity_ms) }), h('td', { text: `${fmt(r.depth_at_start_m)} / ${fmt(r.depth_at_end_m)}` }),
+        h('td', { text: r.note || '' })))));
 }
 function fieldEl(f, d) {
   const v = getVal(f, d), sugKey = d.sugKey || d.key, suggested = !!f.sug[sugKey];
@@ -1051,7 +1166,7 @@ function fieldEl(f, d) {
       delete f.sug[sugKey];
     });
   };
-  const missingNow = d.req && empty(v);
+  const missingNow = isReq(d) && empty(v);
   const head = h('span', {}, h('span', {}, d.label, d.unit ? h('span', { class: 'unit', text: ` (${d.unit})` }) : ''),
     suggested ? h('span', { class: 'chip', text: 'Suggested – check this' }) : missingNow ? h('span', { class: 'chip', style: 'background:color-mix(in srgb,var(--stop) 18%,var(--panel))', text: 'Needed' }) : '');
   return h('label', { class: 'field' + (suggested ? ' suggested' : ''), 'data-help': d.help }, head, input, h('small', { class: 'help', text: d.help }));
@@ -1252,7 +1367,7 @@ async function runCheck() {
   say('Checking your design…', true);
   try {
     const r = await api('/api/check/' + S.module, { features: toFC(true), settings: payloadSettings(), name: S.name });
-    S.results = r; S.stale = false; S.showMissing = false;
+    S.results = r; S.stale = false; S.showMissing = false; S.proposal = null;
     renderResults(); draw(); renderSide(); hint();
     say(r.headline);
     $('#results').scrollTop = 0;
@@ -1271,6 +1386,7 @@ function resultItem(i, inPanel) {
 let showOk = false;
 function renderResults(miss) {
   const box = $('#results');
+  if (!miss && !S.results && S.proposal && !S.showMissing) { box.hidden = false; renderProposal(box); return; }
   if (miss) S.showMissing = true;
   if (!miss && !S.results && S.showMissing) {
     miss = missing();
@@ -1315,7 +1431,7 @@ function signal(tone) {
   return h('div', { class: 'signal', 'aria-label': { r: 'Red', a: 'Amber', g: 'Green' }[on] + ' light', role: 'img' },
     ...['r', 'a', 'g'].map(k => h('i', { class: k + (k === on ? ' on' : '') })));
 }
-function closeResults() { S.showMissing = false; $('#results').hidden = true; }
+function closeResults() { S.showMissing = false; S.proposal = null; $('#results').hidden = true; }
 async function openReport() {
   const w = window.open('', '_blank');
   try {
@@ -1382,7 +1498,7 @@ function showHome() {
   say('Choose what you want to design.');
 }
 function openModule(id, quiet) {
-  S.module = id; S.mod = S.modules.find(m => m.id === id); S.showMissing = false;
+  S.module = id; S.mod = S.modules.find(m => m.id === id); S.showMissing = false; S.proposal = null;
   S.tool = 'select'; S.draft = null; S.sel = null; S.results = null; S.stale = false; S.undo = []; S.redo = [];
   const saved = store.get('cityinfra.v1.' + id);
   if (saved && saved.fc) { S.feats = fromFC(saved.fc); S.settings = saved.settings || {}; S.name = saved.name || 'My design'; }
