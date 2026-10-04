@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>City Infrastructure Designer</title>
+<meta name="description" content="Draw sewers, water lines, rainwater drains, roads, junctions and electricity cables for a new urban sector, check them against the design codes, and hand a traceable report to the engineer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one left-aligned column, 72rem wide; signboard-blue headings; the traffic signal is the one bold element. */
+:root {
+  --paper: #f2f5f6; --panel: #ffffff; --ink: #17242e; --muted: #56656f; --line: #d3dde2;
+  --sign: #1f4e9c; --sign-soft: #e3ebf7;
+  --go: #17824a; --wait: #c98c00; --stop: #c7372f; --lamp-off: #33434e; --housing: #17242e;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --step-0: 1.0625rem; --step-1: 1.3rem; --step-2: 1.75rem; --step-3: 2.4rem; --step-4: clamp(2.2rem, 5vw, 3.5rem);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10181e; --panel: #172229; --ink: #e6edf1; --muted: #9aabb6; --line: #2a3943;
+    --sign: #7fa6e6; --sign-soft: #1b2b44; --go: #3fbf7a; --wait: #f0b62e; --stop: #f06a60; --lamp-off: #2b3942; --housing: #0a1015;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10181e; --panel: #172229; --ink: #e6edf1; --muted: #9aabb6; --line: #2a3943;
+  --sign: #7fa6e6; --sign-soft: #1b2b44; --go: #3fbf7a; --wait: #f0b62e; --stop: #f06a60; --lamp-off: #2b3942; --housing: #0a1015;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--step-0)/1.6 var(--body); }
+.wrap { max-width: 72rem; margin: 0 auto; padding-inline: max(16px, 4vw); }
+h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; }
+h1 { font-size: var(--step-4); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-3); font-weight: 600; color: var(--sign); }
+h3 { font-size: var(--step-1); font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+a { color: var(--sign); text-underline-offset: 3px; }
+a:focus-visible, summary:focus-visible { outline: 3px solid var(--sign); outline-offset: 3px; border-radius: 4px; }
+code { font-size: 0.92em; background: var(--sign-soft); padding: 0.05em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+img { max-width: 100%; height: auto; display: block; }
+
+header.top { border-bottom: 1px solid var(--line); background: var(--panel); }
+header.top .wrap { display: flex; align-items: center; gap: 1rem; padding-block: 0.8rem; flex-wrap: wrap; }
+.mark { display: flex; align-items: center; gap: 0.6rem; font-family: var(--display); font-weight: 600; font-size: 1.15rem; color: var(--ink); text-decoration: none; }
+.mark svg { width: 30px; height: 30px; flex: none; }
+nav.links { margin-left: auto; display: flex; gap: 1.2rem; flex-wrap: wrap; font-weight: 500; }
+nav.links a { color: var(--muted); text-decoration: none; }
+nav.links a:hover { color: var(--sign); }
+
+/* hero */
+.hero { padding-block: clamp(2.5rem, 6vw, 4.5rem) 2.5rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center; }
+.hero .lead { margin-top: 1.1rem; font-size: var(--step-1); line-height: 1.5; color: var(--muted); max-width: 48ch; }
+.signal-block { display: grid; grid-template-columns: auto auto; gap: 1rem; align-items: stretch; }
+.signal { background: var(--housing); border-radius: 22px; padding: 14px; display: grid; gap: 12px; }
+.signal i { width: 56px; height: 56px; border-radius: 50%; display: block; background: var(--lamp-off); }
+.signal i.r { background: var(--stop); box-shadow: 0 0 22px color-mix(in srgb, var(--stop) 70%, transparent); }
+.signal i.a { background: var(--wait); box-shadow: 0 0 22px color-mix(in srgb, var(--wait) 70%, transparent); }
+.signal i.g { background: var(--go); box-shadow: 0 0 22px color-mix(in srgb, var(--go) 70%, transparent); }
+.signal-key { display: grid; grid-template-rows: repeat(3, 56px); row-gap: 12px; padding-block: 14px; }
+.signal-key div { display: flex; flex-direction: column; justify-content: center; line-height: 1.25; }
+.signal-key b { font-family: var(--display); font-size: 1.25rem; font-weight: 600; }
+.signal-key span { color: var(--muted); font-size: 0.95rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .signal i { animation: lamp 1s ease-out 0.1s 1 both; }
+  .signal i.a { animation-delay: 0.3s; } .signal i.g { animation-delay: 0.5s; }
+  @keyframes lamp { 0% { filter: brightness(0.55); } 100% { filter: none; } }
+}
+.shot-hero { margin-top: 0.5rem; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+
+section { padding-block: clamp(2.5rem, 6vw, 4rem); border-top: 1px solid var(--line); }
+section > .wrap > h2 + p { margin-top: 0.8rem; color: var(--muted); font-size: var(--step-1); line-height: 1.5; }
+
+/* what it designs */
+.modules { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1.6rem 2.4rem; list-style: none; padding: 0; }
+.modules li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0.9rem; align-items: start; }
+.modules svg { width: 44px; height: 44px; }
+.modules p { color: var(--muted); margin-top: 0.25rem; }
+
+/* how it works: a real sequence */
+.steps { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1.6rem; counter-reset: s; list-style: none; padding: 0; }
+.steps li { counter-increment: s; border-top: 3px solid var(--sign); padding-top: 0.9rem; }
+.steps li::before { content: counter(s); font-family: var(--display); font-weight: 700; font-size: 2.2rem; color: var(--sign); line-height: 1; display: block; margin-bottom: 0.4rem; font-variant-numeric: tabular-nums; }
+.steps p { color: var(--muted); margin-top: 0.3rem; }
+
+/* new areas */
+.split { margin-top: 2rem; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(1.5rem, 4vw, 3rem); align-items: start; }
+.facts { display: grid; gap: 1.2rem; }
+.facts div { padding-left: 1rem; border-left: 3px solid var(--line); }
+.facts div.key { border-left-color: var(--sign); }
+.facts p { color: var(--muted); margin-top: 0.2rem; }
+.example { margin-top: 1.4rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; overflow-x: auto; }
+.example table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.98rem; }
+.example th, .example td { text-align: left; padding: 0.35rem 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.example td.n { text-align: right; }
+.example caption { text-align: left; font-family: var(--display); font-weight: 600; font-size: 1.1rem; padding-bottom: 0.4rem; }
+.example .note { color: var(--muted); font-size: 0.92rem; margin-top: 0.6rem; }
+
+/* screens */
+.gallery { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: 2rem 1.8rem; }
+figure { margin: 0; }
+figure img { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.98rem; max-width: 60ch; }
+figcaption b { color: var(--ink); font-weight: 600; }
+
+/* basis and status */
+.basis { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1.6rem 2.4rem; }
+.basis p { color: var(--muted); margin-top: 0.3rem; }
+.status { margin-top: 2rem; overflow-x: auto; }
+.status table { border-collapse: collapse; width: 100%; min-width: 34rem; }
+.status th, .status td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.status th { font-family: var(--display); font-weight: 600; font-size: 1.05rem; }
+.pill { display: inline-block; font-size: 0.85rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 99px; white-space: nowrap; }
+.pill.done { background: color-mix(in srgb, var(--go) 18%, transparent); color: var(--go); }
+.pill.next { background: color-mix(in srgb, var(--wait) 22%, transparent); color: color-mix(in srgb, var(--wait) 70%, var(--ink)); }
+.pill.out { background: var(--sign-soft); color: var(--muted); }
+
+.run { margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1.6rem 2.4rem; }
+.run ol { margin: 0.5rem 0 0; padding-left: 1.2rem; color: var(--muted); }
+.run li { margin: 0.25rem 0; }
+
+.caution { margin-top: 2rem; padding: 1rem 1.2rem; border: 2px solid var(--stop); border-radius: 10px; background: var(--panel); }
+.caution h3 { color: var(--stop); }
+.caution p { margin-top: 0.4rem; }
+
+footer { border-top: 1px solid var(--line); padding-block: 1.6rem 2.4rem; color: var(--muted); font-size: 0.95rem; }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .signal i { width: 44px; height: 44px; }
+  .signal-key { grid-template-rows: repeat(3, 44px); }
+  nav.links { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="#top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="6" fill="#1f4e9c"/><path d="M9 22h14M9 16h14M9 10h8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+      City Infrastructure Designer
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#designs">What it designs</a>
+      <a href="#existing">Existing drains</a>
+      <a href="#screens">Screens</a>
+      <a href="#status">Status</a>
+      <a href="#run">Run it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div>
+      <h1>Draw the services of a new sector. Check them against the codes. Hand the engineer a traceable report.</h1>
+      <p class="lead">Sewers, water lines, rainwater drains, roads, junctions and electricity cables, drawn on a plan and checked against CPHEEO, IRC and project rules. Every result is in plain words, with the figures and the rule behind it.</p>
+    </div>
+    <div class="signal-block" aria-label="How results are shown">
+      <div class="signal" aria-hidden="true"><i class="r"></i><i class="a"></i><i class="g"></i></div>
+      <div class="signal-key">
+        <div><b>Problem</b><span>with what to change</span></div>
+        <div><b>Check this</b><span>for the engineer to decide</span></div>
+        <div><b>OK</b><span>meets the rule</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <figure class="shot-hero">
+      <img src="images/drainage-existing.webp" width="1440" height="900" alt="The drainage sheet: a new sector's drains joining an existing nallah. The nallah is selected and the panel shows what it can carry now, the flow today, its spare capacity and the load the new sector adds.">
+    </figure>
+  </div>
+
+  <section id="designs">
+    <div class="wrap">
+      <h2>What it designs</h2>
+      <p>Hydraulic design and road geometry. Structural (RCC) design, pavement thickness and quantities are deliberately left out.</p>
+      <ul class="modules">
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="none" stroke="#8a5a2b" stroke-width="4"/><circle cx="24" cy="24" r="5" fill="#8a5a2b"/></svg>
+          <div><h3>Sewer lines</h3><p>Manning partial flow, peak factors, self-cleansing in the early years, cover, manhole spacing, no pipe getting smaller downstream, crowns matched. EPA SWMM simulation.</p></div></li>
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6C24 6 11 21 11 29a13 13 0 0026 0C37 21 24 6 24 6z" fill="#1f6fd1"/></svg>
+          <div><h3>Water supply</h3><p>Demand from population and litres per head, residual pressure at every point, solved by EPANET 2.3.</p></div></li>
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 22a9 9 0 0117-4 7 7 0 0111 6H10z" fill="#12857a"/><path d="M14 30l-3 7M24 30l-3 7M34 30l-3 7" stroke="#12857a" stroke-width="3" stroke-linecap="round"/></svg>
+          <div><h3>Rainwater drains</h3><p>Rational method with the project's rainfall (IDF), pipes, box and open channels, freeboard and velocities. Existing drains, villages and outfall flood levels taken into account. EPA SWMM storm simulation.</p></div></li>
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M16 42L22 6h4l6 36z" fill="#9aa5ad"/><path d="M24 10v6M24 22v6M24 34v6" stroke="#fff" stroke-width="2.5"/></svg>
+          <div><h3>Roads</h3><p>Any shape: bends with radius and transition, or freehand with curves fitted. Minimum radius, transitions, reverse and broken-back curves, grades, vertical curves, superelevation.</p></div></li>
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M19 4h10v15h15v10H29v15H19V29H4V19h15z" fill="#9aa5ad"/></svg>
+          <div><h3>Junctions</h3><p>T, Y, crossroads and roundabouts: kerb returns for the design vehicle, sight triangles with obstructions, entry and exit radii, weaving lengths and capacity.</p></div></li>
+        <li><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M27 4L12 27h10l-3 17 17-25H25z" fill="#7a3fb5"/></svg>
+          <div><h3>Electricity</h3><p>Substation to transformer to feeder pillar to building: demand and diversity, transformer loading, cable current and voltage drop, with size proposals.</p></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p>The program is built to be used by someone who is not a specialist. Every button explains itself when you point at it.</p>
+      <ol class="steps">
+        <li><h3>Draw</h3><p>Place manholes, drain points or transformers. Join them with pipes, drains or cables. Draw roads by clicking at each bend, or freehand.</p></li>
+        <li><h3>Fill in</h3><p>Ground levels, people served and loads. Values the program suggests are marked <i>Suggested – check this</i>. Survey levels can be loaded from a CSV file.</p></li>
+        <li><h3>Check</h3><p>Results come in plain words, with why each one matters and what to change. Each item also has its figures, the rule used, the rule's source, and whether that rule is verified.</p></li>
+        <li><h3>Hand over</h3><p>A full report for the engineer, with the method, the design sheet, the simulation results and a blank approval block.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="existing">
+    <div class="wrap">
+      <h2>New sectors next to what already exists</h2>
+      <p>A new sector has to drain into nallahs and drains that are already there, past villages whose levels cannot be changed.</p>
+      <div class="split">
+        <div class="facts">
+          <div class="key"><h3>Spare capacity of existing drains</h3><p>Each existing drain gets the same set of figures: what it can carry today with its present silt, the flow already in it, its spare (residual) capacity, the load the new areas add, and how much desilting would gain.</p></div>
+          <div class="key"><h3>Villages keep their levels</h3><p>The receiving drain must stay at least 0.15 m below the mouth of a village drain, so the village water still flows out.</p></div>
+          <div><h3>Outfall and flood level</h3><p>New drains must not arrive below the outfall bed. A river or nallah flood level above the drain's water level is reported as backwater.</p></div>
+          <div><h3>Sizes and levels proposed</h3><p><i>Design the new drains for me</i> proposes size, bed levels and slope for every new drain from the ground, the storm, the existing drains and the outfall. Anything that cannot work is listed for decision. Nothing is changed without the designer accepting it.</p></div>
+        </div>
+        <div>
+          <div class="example">
+            <table>
+              <caption>Worked example: the existing nallah in the sample sector</caption>
+              <tr><th scope="col">Nallah reach</th><th scope="col">Can carry now</th><th scope="col">Flow today</th><th scope="col">Spare today</th><th scope="col">New areas add</th><th scope="col">Used</th></tr>
+              <tr><td>NALLAH-1</td><td class="n">3.26</td><td class="n">1.67</td><td class="n">1.60</td><td class="n">0.00</td><td class="n">51 %</td></tr>
+              <tr><td>NALLAH-2</td><td class="n">7.67</td><td class="n">1.49</td><td class="n">6.19</td><td class="n">1.71</td><td class="n">42 %</td></tr>
+            </table>
+            <p class="note">Flows in m³/s, 5-year storm, using the program's sample rainfall, which is invented for trying the program. Silt of 0.25 m and 0.30 m is included. Desilting NALLAH-2 would raise what it can carry to 9.60 m³/s.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <h2>Screens</h2>
+      <p>Taken from the running program.</p>
+      <div class="gallery">
+        <figure><img src="images/home.webp" width="1440" height="900" loading="lazy" alt="Start page with six tiles: sewer lines, water supply, rainwater drains, roads, junctions and electricity.">
+          <figcaption><b>Start page.</b> Pick what to design and start from an example or an empty sheet.</figcaption></figure>
+        <figure><img src="images/sewer-fields.webp" width="1440" height="900" loading="lazy" alt="A manhole selected, with fields for ground level and people served, each with a short explanation.">
+          <figcaption><b>Plain fields.</b> Every field says what to enter and why. Suggested values are marked.</figcaption></figure>
+        <figure><img src="images/sewer-results.webp" width="1440" height="900" loading="lazy" alt="Sewer check results: one problem found, with the advice to steepen the pipe to at least 1 in 175.">
+          <figcaption><b>Results with advice.</b> A sewer drawn from scratch. Its levels were filled in from the ground levels, and the check says exactly how much steeper the pipe must be.</figcaption></figure>
+        <figure><img src="images/drainage-proposal.webp" width="1440" height="900" loading="lazy" alt="Proposed sizes and levels for three new drains, with one conflict listed: a drain would arrive below the bed of the existing nallah.">
+          <figcaption><b>Proposed sizes and levels.</b> The conflict with the existing nallah's bed is put before the designer, not hidden.</figcaption></figure>
+        <figure><img src="images/road.webp" width="1440" height="900" loading="lazy" alt="Two roads: one drawn by clicking at bends with 120 m radius curves, one drawn freehand with fitted curves of 265 m and 280 m radius.">
+          <figcaption><b>Roads of any shape.</b> One road was drawn bend by bend and one freehand. The fitted alignment (blue) and the radius of each curve are shown.</figcaption></figure>
+        <figure><img src="images/roundabout.webp" width="1440" height="900" loading="lazy" alt="A four-arm roundabout with its central island, ring road and entry and exit kerbs drawn.">
+          <figcaption><b>Junctions.</b> A roundabout with its island, ring road, entry and exit kerbs. The weaving checks pass.</figcaption></figure>
+        <figure><img src="images/electrical.webp" width="1440" height="900" loading="lazy" alt="Electricity network check: substation, transformer, feeder pillar and buildings, with problems listed for cable current and voltage drop.">
+          <figcaption><b>Electricity.</b> Transformer loading, cable current and voltage drop, with the cable or transformer size that would work.</figcaption></figure>
+        <figure><img src="images/help.webp" width="1440" height="900" loading="lazy" alt="The Help guide listing the steps, the meaning of the colours, the keys, and every control on the screen.">
+          <figcaption><b>Help on every screen.</b> F1 opens a guide listing every control that is on the screen at that moment.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="basis">
+    <div class="wrap">
+      <h2>Engineering basis</h2>
+      <div class="basis">
+        <div><h3>Rules you can trace</h3><p>Every design value lives in a rule file with its document, clause and state: <i>verified</i>, <i>project decision</i> or <i>needs confirming</i>. The report lists the rules used. No value is built into the code.</p></div>
+        <div><h3>Real engines</h3><p>EPA SWMM 5.2.4 for sewer and storm networks and EPANET 2.3 for water networks, called directly. If an engine is missing, the program says the simulation was not run. It never shows invented figures.</p></div>
+        <div><h3>Calculation is not approval</h3><p>A result is a calculation for an engineer. Objects keep their status: existing, proposed, calculated, checked, approved. Approval is always a person's act, and a frozen revision cannot be changed.</p></div>
+        <div><h3>Tested on every change</h3><p>148 automatic tests, a browser walk-through of every screen, the database scripts, Windows and a server image all run on each change to the code.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <h2>Status, October 2026</h2>
+      <div class="status">
+        <table>
+          <tr><th scope="col">Part</th><th scope="col">State</th><th scope="col">Notes</th></tr>
+          <tr><td>Sewer, water, storm drainage, roads, junctions, electricity</td><td><span class="pill done">Working</span></td><td>Design checks, simulations, reports</td></tr>
+          <tr><td>Existing drains, villages, outfalls, survey levels, proposed drain sizes</td><td><span class="pill done">Working</span></td><td>Drainage module</td></tr>
+          <tr><td>The simple app for non-specialists</td><td><span class="pill done">Working</span></td><td>Windows, Mac, Linux; runs in the browser</td></tr>
+          <tr><td>One sheet for all services on a real map</td><td><span class="pill next">Next</span></td><td>Basemap and the data sources to be decided</td></tr>
+          <tr><td>Import of existing data (DXF, shapefile, master plan)</td><td><span class="pill next">Next</span></td><td></td></tr>
+          <tr><td>Natural drainage paths from the survey, utility corridors and clash checks</td><td><span class="pill next">Next</span></td><td></td></tr>
+          <tr><td>PNG (gas) and telecom</td><td><span class="pill next">Later</span></td><td></td></tr>
+          <tr><td>RCC / structural design, pavement thickness, quantities</td><td><span class="pill out">Not included</span></td><td>By decision</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="run">
+    <div class="wrap">
+      <h2>Run it</h2>
+      <div class="run">
+        <div><h3>On a Windows computer</h3>
+          <ol><li>Install Python 3.11 or newer from python.org (tick <i>Add Python to PATH</i>).</li>
+            <li>Download the project from GitHub (<i>Code → Download ZIP</i>) and unzip it.</li>
+            <li>Double-click <code>start-app.bat</code>. It installs what it needs the first time, then opens the designer in the browser.</li></ol></div>
+        <div><h3>In Visual Studio Code</h3>
+          <ol><li>Open the project folder.</li>
+            <li>Accept the recommended extensions.</li>
+            <li>Press <b>F5</b> and choose <i>City Infrastructure Designer</i>. Tasks for tests and the engines are under <i>Terminal → Run Task</i>.</li></ol></div>
+        <div><h3>Source code</h3>
+          <p><a href="https://github.com/manohariitroorkee-cyber/Cloud-session/tree/platform/foundation-stage1">github.com/manohariitroorkee-cyber/Cloud-session</a>, branch <code>platform/foundation-stage1</code>. Start with <code>START-HERE.md</code>.</p></div>
+      </div>
+      <div class="caution">
+        <h3>Before relying on any result</h3>
+        <p>Many design values are still marked <i>needs confirming</i> against the printed codes. The sample rainfall and the sample cable list are invented, for trying the program only. A qualified engineer must review and approve every design.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">City Infrastructure Designer. Built on EPA SWMM 5.2.4 and OWA-EPANET 2.3. Results are calculations, not approved designs.</div>
+</footer>
+</body>
+</html>

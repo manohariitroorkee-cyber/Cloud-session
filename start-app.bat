@@ -20,9 +20,13 @@ if errorlevel 1 (
     exit /b 1
   )
 )
-if not exist "..\engines\lib" (
-  echo Note: the simulation engines EPA SWMM and EPANET are not built yet, so water supply checks
-  echo and network simulations will be skipped.
+if not exist "..\engines\lib\swmm5.dll" (
+  echo First start: downloading the calculation engines EPA SWMM and EPANET - one time only...
+  powershell -NoProfile -ExecutionPolicy Bypass -File "..\engines\get_engines_windows.ps1"
+  if not exist "..\engines\lib\swmm5.dll" (
+    echo The engines could not be downloaded. Water supply checks and network simulations will be skipped;
+    echo everything else works. See docs\platform\VSCODE_AND_WEBSITE.md
+  )
 )
 %PY% -m cityinfra.app %*
 pause

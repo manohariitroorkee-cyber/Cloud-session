@@ -65,8 +65,10 @@ jobs:
         with: { name: app-screenshots, path: backend/screenshots }
 
   windows:
-    # Same tests on Windows, with the engines built by MSVC; the DLLs are kept as an artifact.
+    # Same tests on Windows, with the engines built by MSVC; the DLLs are published as the
+    # "engines-windows" release download, which start-app.bat fetches when they are missing.
     runs-on: windows-latest
+    permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -79,8 +81,38 @@ jobs:
       - name: Unit and engine tests
         working-directory: backend
         run: python -m unittest discover -s tests -t . -v
+      - name: The engines really run (SWMM and EPANET results in the reports)
+        working-directory: backend
+        shell: bash
+        run: |
+          python -m cityinfra.cli drainage --sample -o d.md && grep -q "SWMM results" d.md
+          python -m cityinfra.cli water --sample > w.txt && grep -qi "EPANET" w.txt
       - uses: actions/upload-artifact@v4
         with: { name: engines-windows, path: engines/lib }
+      - name: Publish the DLLs as a release download
+        if: github.event_name == 'push'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        shell: bash
+        run: |
+          (cd engines/lib && 7z a ../../engines-windows.zip epanet2.dll swmm5.dll)
+          gh release view engines-windows >/dev/null 2>&1 || gh release create engines-windows --prerelease \
+            --target "${{ github.sha }}" --title "Calculation engines for Windows (EPANET 2.3, EPA SWMM 5.2.4)" \
+            --notes "epanet2.dll (built from this repository) and swmm5.dll (USEPA SWMM v5.2.4), 64-bit, built by the platform workflow. start-app.bat downloads them automatically into engines/lib."
+          gh release upload engines-windows engines-windows.zip --clobber
+      - name: start-app.bat can fetch the published engines
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force engines/lib
+          powershell -ExecutionPolicy Bypass -File engines/get_engines_windows.ps1
+          if (-not (Test-Path engines/lib/swmm5.dll) -or -not (Test-Path engines/lib/epanet2.dll)) { exit 1 }
+
+      - name: start-app.bat starts the designer
+        shell: pwsh
+        run: |
+          Start-Process cmd -ArgumentList '/c', 'start-app.bat', '--no-browser', '--port', '8790'
+          for ($i = 0; $i -lt 40; $i++) { try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8790/api/modules | Out-Null; exit 0 } catch { Start-Sleep 2 } }
+          exit 1
 
   docker:
     # The web-service image builds and answers.

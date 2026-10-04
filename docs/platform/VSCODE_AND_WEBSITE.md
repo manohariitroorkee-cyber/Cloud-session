@@ -11,13 +11,18 @@ You need three free programs:
 You can open the project in either of two ways.
 
 **From the zip.** Unzip `CityInfraDesigner.zip`, then in VS Code choose *File → Open Folder…* and pick
-the unzipped `CityInfraDesigner` folder. The zip already contains the Windows calculation engines
-(`engines/lib/epanet2.dll`, `swmm5.dll`).
+the unzipped `CityInfraDesigner` folder.
 
 **From GitHub.** Press F1, choose *Git: Clone*, and paste
 `https://github.com/manohariitroorkee-cyber/Cloud-session.git`. Then switch to the branch
-`platform/foundation-stage1` using the branch name at the bottom-left of the window. A clone has no
-engine DLLs. Run task 4 (below), or copy them from the zip into `engines/lib/`.
+`platform/foundation-stage1` using the branch name at the bottom-left of the window.
+
+**The calculation engines** (EPA SWMM and EPANET) are not part of the source code. On Windows,
+`start-app.bat` downloads them into `engines/lib/` the first time it runs. They are built from source
+by the repository's automatic checks and published under *Releases → engines-windows*. To fetch them
+from VS Code without starting the app, run
+`powershell -ExecutionPolicy Bypass -File engines\get_engines_windows.ps1` in the terminal. Without
+the engines everything still works, except water-supply checks and network simulations.
 
 When VS Code offers to install the recommended extensions (Python and others), accept.
 
