@@ -121,6 +121,17 @@ class AuditRegressionTests(unittest.TestCase):
             probs = import_feature_collection(Project("x", 32643), self._fc(crs=name))
             self.assertIn("geographic", probs[0])
 
+    def test_lonlat_values_with_projected_crs_refused(self):
+        fc = self._fc(crs="urn:ogc:def:crs:EPSG::32643")
+        for f in fc["features"]:
+            g = f["geometry"]
+            if g["type"] == "Point":
+                g["coordinates"] = [77.1, 28.85]
+            else:
+                g["coordinates"] = [[77.1, 28.85], [77.1001, 28.8501]]
+        probs = import_feature_collection(Project("x", 32643), fc)
+        self.assertIn("look like longitude/latitude", probs[0])
+
     def test_project_must_use_projected_crs(self):
         with self.assertRaises(ValueError):
             Project("x", 4326)

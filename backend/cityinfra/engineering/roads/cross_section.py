@@ -1,9 +1,10 @@
 """Road cross-section template – finished-surface GEOMETRY only.
 
-Superelevation: on curves where the design superelevation exceeds the camber, each
-carriageway is rotated to a single crossfall equal to the superelevation (about the
-median edge on a divided road, about the centreline on an undivided one), varying
-with curvature through the transitions.
+Superelevation: on curves where the design superelevation E exceeds the camber, the
+outer side of each carriageway rotates from −camber to +E and the inner side from
+−camber to −E, linearly with curvature through the transition (about the median edge on
+a divided road, the centreline on an undivided one).  Where E ≤ camber the normal
+cambered section is kept.
 
 Scope decision: pavement thickness design, pavement layers, structural (RCC)
 design and earthwork/quantities are NOT part of this module.  The template
@@ -71,22 +72,33 @@ def row_half_width(tpl: dict) -> float:
     return half_section(tpl)[-1].x1
 
 
-def side_slope_pct(tpl: dict, offset: float, e: float) -> float | None:
-    """Carriageway slope (%, + rising outwards) on the side of `offset` for superelevation e
-    (fraction, + for a right-hand curve, which falls to the right).  None when the
-    superelevation does not exceed the normal camber (normal section kept)."""
-    camber = max((abs(s.get("crossfall_pct", 0.0)) for s in tpl["strips"] if s["type"] == "carriageway"), default=0.0)
-    if abs(e) * 100 <= camber + 1e-12:
-        return None
-    side = 1.0 if offset >= 0 else -1.0
-    return -e * side * 100
+def carriageway_slopes(camber_pct: float, e_full: float, progress: float, turn: int) -> dict[int, float]:
+    """Carriageway crossfall (%, + rising outwards) on each side (+1 right, −1 left).
+
+    Superelevation is developed linearly with `progress` (0 on the straight, 1 on the
+    arc): the outer side rotates from −camber to +E and the inner side from −camber
+    to −E, so there is no step in level anywhere.  E ≤ camber keeps the normal
+    cambered section (no superelevation provided)."""
+    c, E = abs(camber_pct), abs(e_full) * 100
+    if E <= c + 1e-12 or progress <= 0:
+        return {1: -c, -1: -c}
+    p = min(progress, 1.0)
+    outer = -c + p * (c + E)
+    inner = -c - p * (E - c)
+    inside = 1 if turn > 0 else -1            # a right-hand curve falls to the right
+    return {inside: inner, -inside: outer}
 
 
-def surface_at(tpl: dict, offset: float, e: float = 0.0) -> tuple[str, float] | None:
+def camber_of(tpl: dict) -> float:
+    return max((abs(s.get("crossfall_pct", 0.0)) for s in tpl["strips"] if s["type"] == "carriageway"), default=0.0)
+
+
+def surface_at(tpl: dict, offset: float, slopes: dict[int, float] | None = None) -> tuple[str, float] | None:
     """(strip type, level relative to centreline FRL) at an offset, or None outside the template.
-    e = superelevation at this chainage (fraction, + right-hand curve)."""
+    slopes = carriageway crossfall per side from carriageway_slopes() (None = normal camber)."""
     a = abs(offset)
-    for s in half_section(tpl, side_slope_pct(tpl, offset, e)):
+    side = 1 if offset >= 0 else -1
+    for s in half_section(tpl, slopes[side] if slopes else None):
         if s.x0 - 1e-9 <= a <= s.x1 + 1e-9:
             f = (a - s.x0) / (s.x1 - s.x0) if s.x1 > s.x0 else 0.0
             return s.type, s.z0 + f * (s.z1 - s.z0)
@@ -100,15 +112,16 @@ class Section:
     points: list[tuple[float, float, float | None]] = field(default_factory=list)  # (offset, design, ground)
 
 
-def section_at(ch: float, frl: float, tpl: dict, ground_at, step: float = 0.5, e: float = 0.0) -> Section:
-    """Design surface and ground across the template at chainage ch (with superelevation e).
+def section_at(ch: float, frl: float, tpl: dict, ground_at, step: float = 0.5,
+               slopes: dict[int, float] | None = None) -> Section:
+    """Design surface and ground across the template at chainage ch (with carriageway slopes).
     ground_at(offset) -> level or None (outside surveyed terrain)."""
     W = row_half_width(tpl)
     n = int(round(W / step))
     offs = sorted({-W, W, 0.0} | {round(k * step, 6) for k in range(-n, n + 1)})
     pts = []
     for o in offs:
-        hit = surface_at(tpl, o, e)
+        hit = surface_at(tpl, o, slopes)
         if hit:
             pts.append((o, frl + hit[1], ground_at(o)))
     return Section(ch, frl, pts)

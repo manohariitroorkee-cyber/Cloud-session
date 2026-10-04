@@ -208,8 +208,9 @@ class DrainDesign:
                 "section": size, "slope_1_in": round(1 / d.slope), "area_ha": round(self.area_ha, 3),
                 "ca_ha": round(self.ca_ha, 3), "tc_min": round(self.tc_min, 1),
                 "i_mm_h": round(self.intensity, 1), "q_m3s": round(self.flow, 4),
-                "q_cap_m3s": round(s.q_capacity, 4), "depth_ratio": round(s.depth_ratio, 3),
-                "velocity_ms": round(s.velocity, 2), "result": "FAIL" if self.failed else "PASS"}
+                "q_cap_m3s": round(s.q_capacity, 4), "depth_ratio": round(s.depth_ratio, 3) if s.capacity_ok else "full",
+                "velocity_ms": round(s.velocity, 2) if s.capacity_ok else "surcharged",
+                "result": "FAIL" if self.failed else "PASS"}
 
 
 @dataclass
@@ -290,9 +291,11 @@ def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
         if st.capacity_ok:
             v = st.velocity
         else:
-            v = st.q_capacity / d.section.full_area()
-            errors_note = f"Drain {d.obj.label}: surcharged – travel time uses the full-section velocity at capacity ({v:.2f} m/s)."
-            notes.append(errors_note)
+            # surcharged: the true velocity is unknown until the drain is resized; use the faster of the
+            # capacity velocity and Q/A_full so downstream tc (and hence intensity) is not understated
+            v = max(st.q_capacity / d.section.full_area(), q / d.section.full_area())
+            notes.append(f"Drain {d.obj.label}: surcharged – travel time uses {v:.2f} m/s (the larger of the "
+                         f"capacity velocity and Q/A_full) so downstream intensity is not understated; resize and rerun.")
         travel = d.length / v / 60.0 if v > 0 else 0.0
         carried[k] = (ca, area, tc + travel)
         dd = DrainDesign(d, ca, area, tc, i, q, n, st, travel)

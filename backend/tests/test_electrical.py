@@ -69,6 +69,11 @@ class ElectricalTests(unittest.TestCase):
         self.assertAlmostEqual(chk.actual, 294.4444 / 250, places=4)
         self.assertEqual(chk.status, CheckStatus.FAIL)
 
+    def test_node_not_above_sum_of_outgoing(self):
+        ss = self.res.demand[self.pr.by_name("SS1").id]
+        out = sum(self.res.demand[c.down.id].s_kva for c in self.net.children[ss.obj.id])
+        self.assertLessEqual(ss.s_kva, out + 1e-9)
+
     def test_single_load_not_diversified(self):
         pr = sample_electrical_project()
         for name in ("LD1", "LD2", "LD3", "SL1"):           # leave FP1 with one load

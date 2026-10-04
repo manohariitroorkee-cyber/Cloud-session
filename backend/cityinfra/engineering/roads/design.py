@@ -49,10 +49,23 @@ class RoadDesign:
     sections: list[xs.Section]
     checks: list[CheckResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
-    e_at: object = None             # chainage -> superelevation (fraction, + right-hand)
+    e_at: object = None             # chainage -> (design E of the curve, progress 0..1, turn ±1) or None
 
     def superelevation(self, ch: float) -> float:
-        return self.e_at(ch) if self.e_at else 0.0
+        """Signed superelevation actually developed at ch (fraction, + right-hand); 0 = normal camber."""
+        st = self.e_at(ch) if self.e_at else None
+        if not st:
+            return 0.0
+        E, p, turn = st
+        cam = xs.camber_of(self.road.attr("template")) / 100
+        return 0.0 if E <= cam else math.copysign(min(p, 1.0) * E, turn)
+
+    def slopes(self, ch: float) -> dict[int, float] | None:
+        st = self.e_at(ch) if self.e_at else None
+        if not st:
+            return None
+        E, p, turn = st
+        return xs.carriageway_slopes(xs.camber_of(self.road.attr("template")), E, p, turn)
 
     def long_section(self, step: float = 20.0, tin: TIN | None = None) -> list[dict]:
         rows, ch = [], 0.0
@@ -108,6 +121,10 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
         raise ValueError(f"Road {road.label}: design_speed_kmh is required.")
     if not road.attr("template"):
         raise ValueError(f"Road {road.label}: a cross-section template is required.")
+    terrains = rules.value("transition_empirical_coeff")
+    if road.attr("terrain") not in terrains:
+        raise ValueError(f"Road {road.label}: terrain must be one of {', '.join(terrains)} "
+                         f"(given {road.attr('terrain')!r}).")
     try:
         h = horizontal_of(road)
     except (ValueError, KeyError) as e:
@@ -126,9 +143,16 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
     tin = terrain(pr)
     V = float(road.attr("design_speed_kmh"))
     emax, div = rules.value("e_max"), rules.value("e_design_divisor")
-    def e_at(ch: float) -> float:
+
+    def e_at(ch: float):
+        """(design superelevation of the curve, development progress, hand) at ch."""
         k = h.curvature(ch)
-        return 0.0 if abs(k) < 1e-12 else math.copysign(min(V * V * abs(k) / div, emax), k)
+        if abs(k) < 1e-12:
+            return None
+        g = next((g for g in h.groups if g.ch_start - 1e-9 <= ch <= g.ch_end + 1e-9), None)
+        kmax = max(max(abs(e.k0), abs(e.k1)) for e in g.elements) if g else abs(k)
+        E = min(V * V * kmax / div, emax)
+        return E, abs(k) / kmax, 1 if k > 0 else -1
     sections: list[xs.Section] = []
     if tin is None:
         errors.append("No terrain points: ground profile and cross-section ground lines not available.")
@@ -139,7 +163,8 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
             chs.append(h.length)
         for ch in chs:
             ground = (lambda off, ch=ch: tin.level(*h.offset_point(ch, off))) if tin else (lambda off: None)
-            sections.append(xs.section_at(ch, v.level(ch), tpl, ground, e=e_at(ch)))
+            sections.append(xs.section_at(ch, v.level(ch), tpl, ground,
+                                          slopes=(lambda st: xs.carriageway_slopes(xs.camber_of(tpl), *st) if st else None)(e_at(ch))))
     d = RoadDesign(road, h, v, sections, errors=errors, e_at=e_at)
     d.checks = _checks(d, rules)
     return d
@@ -160,13 +185,16 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
         min(V * V * abs(k) / rules.value("e_design_divisor"), e_max.value), k)
 
     emp = rules.get("transition_empirical_coeff")
-    emp_c = emp.value[r.attr("terrain", "plain")]
+    emp_c = emp.value[r.attr("terrain")]
+
+    def runoff(k0: float, k1: float) -> float:
+        """Length to change superelevation from e(k0) to e(k1) at the rate 1 in N."""
+        return abs(e_of(k1) - e_of(k0)) * npar.value * w_rot
 
     def ls_required(k0: float, k1: float) -> tuple[float, float, float]:
-        """(required length, centrifugal criterion, run-off criterion) for a change of curvature k0 → k1.
-        The run-off criterion here also covers the empirical IRC form Ls = c·V²/R (c by terrain)."""
+        """(required length, centrifugal criterion, larger of run-off and empirical c·V²·Δk)."""
         l1 = v ** 3 * abs(k1 - k0) / C
-        l2 = max(abs(e_of(k1) - e_of(k0)) * npar.value * w_rot, emp_c * V * V * abs(k1 - k0))
+        l2 = max(runoff(k0, k1), emp_c * V * V * abs(k1 - k0))
         return max(l1, l2), l1, l2
 
     shift_par = rules.get("transition_required_shift_m")
@@ -241,7 +269,7 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
         else:
             k_end, k_start = g1.elements[-1], g2.elements[0]
             has_tr = k_end.kind == "spiral" and k_start.kind == "spiral"
-            need = 0.0 if has_tr else (ls_required(0, k_end.k1)[2] + ls_required(0, k_start.k0)[2])
+            need = 0.0 if has_tr else (runoff(0, k_end.k1) + runoff(0, k_start.k0))
             out.append(CheckResult("reverse_curve", r.id, lbl, CheckStatus.PASS if t >= need - 1e-6 else CheckStatus.FAIL,
                                    f"Reverse curves separated by {t:.1f} m of straight; "
                                    + ("both have transitions, so they may meet directly." if has_tr else
@@ -311,7 +339,7 @@ def level_impacts(pr: Project, d: RoadDesign, tolerance_m: float = 0.05) -> list
             ch, off = d.h.station(pt)
             if abs(off) > W or ch <= 0 or ch >= d.h.length:
                 continue
-            strip, dz = xs.surface_at(tpl, off, d.superelevation(ch))
+            strip, dz = xs.surface_at(tpl, off, d.slopes(ch))
             z = d.v.level(ch) + dz
             for t in (RelationType.LOCATED_IN, RelationType.DEPENDS_ON_LEVEL):
                 if (o.id, d.road.id, t) not in existing:

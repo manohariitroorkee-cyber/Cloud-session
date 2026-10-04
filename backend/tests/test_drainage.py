@@ -159,8 +159,10 @@ class DrainageAuditRegressionTests(unittest.TestCase):
         res = design_network(build_network(pr, rules), rules, IDF_, 5, "residential")
         d2 = next(d for d in res.drains if d.drain.obj.name == "D2")
         self.assertFalse(d2.state.capacity_ok)
-        v_cap = d2.state.q_capacity / d2.drain.section.full_area()
-        self.assertAlmostEqual(d2.travel_min, d2.drain.length / v_cap / 60, places=9)
+        A = d2.drain.section.full_area()
+        v = max(d2.state.q_capacity / A, d2.flow / A)          # the faster: downstream tc not overstated
+        self.assertAlmostEqual(d2.travel_min, d2.drain.length / v / 60, places=9)
+        self.assertEqual(d2.row()["velocity_ms"], "surcharged")
         self.assertTrue(any("D2: surcharged" in n for n in res.notes))
 
     def test_lining_is_required(self):

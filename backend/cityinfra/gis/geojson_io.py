@@ -16,7 +16,7 @@ import json
 from typing import Any
 
 from ..model.core import EngineeringObject, ObjectKind, Project, RelationType
-from .geometry import require_projected
+from .geometry import looks_geographic, require_projected
 
 RESERVED = {"kind", "name", "status", "attributes", "from", "to", "id"}
 IMPORT_STATUSES = {"existing", "proposed"}      # checked / approved can only be set by a review record
@@ -50,8 +50,13 @@ def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str
     if epsg != pr.crs_epsg:
         problems.append(f"File CRS EPSG:{epsg} differs from project EPSG:{pr.crs_epsg}; reproject before import.")
         return problems
+    feats = fc.get("features", [])
+    if looks_geographic([f["geometry"]["coordinates"] for f in feats if f.get("geometry")]):
+        problems.append(f"The file declares EPSG:{epsg} but its coordinates look like longitude/latitude; "
+                        "reproject the data before import.")
+        return problems
     links: list[tuple[EngineeringObject, str | None, str | None]] = []
-    for i, f in enumerate(fc.get("features", [])):
+    for i, f in enumerate(feats):
         props = dict(f.get("properties") or {})
         try:
             kind = ObjectKind(props.get("kind"))

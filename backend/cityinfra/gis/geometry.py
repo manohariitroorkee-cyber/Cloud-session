@@ -18,7 +18,23 @@ Coord = Sequence[float]
 
 # Geographic CRSs (degrees) must not be used for engineering measurement.
 # Common ones are listed; with pyproj installed (API layer) every code is checked.
-GEOGRAPHIC_EPSG = {4326, 4269, 4258, 4283, 7844, 4674, 4019, 4240, 4146, 4755, 4979}
+GEOGRAPHIC_EPSG = {4326, 4269, 4258, 4283, 7844, 4674, 4019, 4240, 4146, 4755, 4979, 4490, 4612, 6668,
+                   4617, 4618, 4686, 4167, 4148, 4258, 4230, 4231, 4236, 4237, 4238, 4239, 4244, 4245}
+
+
+def looks_geographic(coords: list) -> bool:
+    """True when every coordinate pair lies within longitude/latitude ranges – a projected
+    metric CRS for India never produces such small values."""
+    flat = []
+
+    def walk(c):
+        if c and isinstance(c[0], (int, float)):
+            flat.append(c)
+        else:
+            for x in c:
+                walk(x)
+    walk(coords)
+    return bool(flat) and all(abs(c[0]) <= 180 and abs(c[1]) <= 90 for c in flat)
 
 
 def require_projected(epsg: int) -> None:

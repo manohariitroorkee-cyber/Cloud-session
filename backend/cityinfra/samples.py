@@ -162,7 +162,7 @@ def sample_road_project() -> Project:
     curves = {"1": [200, 60], "2": [200, 60]}
     length = _build([(E0 + x, N0 + y) for x, y in pis], {int(k): tuple(v) for k, v in curves.items()}).length
     road = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln(*pis), name="R1", attributes={
-        "design_speed_kmh": 50, "kerbed": True,
+        "design_speed_kmh": 50, "terrain": "plain", "kerbed": True,
         "curves": curves,
         "profile": [[0, 216.40, 0], [200, 215.60, 80], [round(length, 3), 216.90, 0]],
         "template": SAMPLE_ROAD_TEMPLATE, "section_interval_m": 20}))
@@ -227,10 +227,10 @@ def sample_junction_project() -> Project:
     tpl = {"strips": [{"type": "carriageway", "width": 3.5, "crossfall_pct": -2.5},
                       {"type": "footpath", "width": 1.8, "crossfall_pct": 2.0, "step_m": 0.15}]}
     main = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln((400, 0), (800, 0)), name="MAIN", attributes={
-        "design_speed_kmh": 40, "priority": "major", "curves": {}, "template": tpl,
+        "design_speed_kmh": 40, "terrain": "plain", "priority": "major", "curves": {}, "template": tpl,
         "profile": [[0, 216.0, 0], ["end", 215.6, 0]]}))
     side = pr.add(EngineeringObject(ObjectKind.ROAD_ALIGNMENT, _ln((600, 0), (600, 250)), name="SIDE", attributes={
-        "design_speed_kmh": 30, "curves": {}, "template": tpl, "profile": [[0, 216.0, 0], ["end", 216.5, 0]]}))
+        "design_speed_kmh": 30, "terrain": "plain", "curves": {}, "template": tpl, "profile": [[0, 216.0, 0], ["end", 216.5, 0]]}))
     _ = (main, side)
     pr.add(EngineeringObject(ObjectKind.ROAD_JUNCTION, _pt(600, 0), name="J-T", attributes={
         "type": "intersection", "control": "priority", "design_vehicle": "bus",

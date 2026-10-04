@@ -25,6 +25,13 @@ BEGIN
      WHERE project_id = OLD.project_id AND frozen
        AND number >= OLD.rev_from AND (OLD.rev_to IS NULL OR number < OLD.rev_to);
     IF last_frozen IS NULL THEN
+        -- the row was outside every frozen revision: an update may not move it into one
+        IF TG_OP = 'UPDATE' AND EXISTS (
+            SELECT 1 FROM revision
+             WHERE project_id = NEW.project_id AND frozen
+               AND number >= NEW.rev_from AND (NEW.rev_to IS NULL OR number < NEW.rev_to)) THEN
+            RAISE EXCEPTION 'this change would make the row part of a frozen revision';
+        END IF;
         RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
     END IF;
     IF TG_OP = 'DELETE' THEN
@@ -43,11 +50,15 @@ CREATE TRIGGER eng_object_frozen BEFORE UPDATE OR DELETE ON eng_object_version
 CREATE TRIGGER eng_relationship_frozen BEFORE UPDATE OR DELETE ON eng_relationship
     FOR EACH ROW EXECUTE FUNCTION protect_frozen();
 
--- new rows may only be added to an open (not frozen) revision
+-- new rows may not be visible in any frozen revision (neither added to one nor reaching into one)
 CREATE FUNCTION insert_into_open_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE f integer;
 BEGIN
-    IF EXISTS (SELECT 1 FROM revision WHERE project_id = NEW.project_id AND number = NEW.rev_from AND frozen) THEN
-        RAISE EXCEPTION 'revision % is frozen; add the change to an open revision', NEW.rev_from;
+    SELECT min(number) INTO f FROM revision
+     WHERE project_id = NEW.project_id AND frozen
+       AND number >= NEW.rev_from AND (NEW.rev_to IS NULL OR number < NEW.rev_to);
+    IF f IS NOT NULL THEN
+        RAISE EXCEPTION 'the new row would be part of frozen revision %; add the change to a later open revision', f;
     END IF;
     RETURN NEW;
 END $$;
@@ -56,15 +67,21 @@ CREATE TRIGGER eng_object_open_rev BEFORE INSERT ON eng_object_version
 CREATE TRIGGER eng_relationship_open_rev BEFORE INSERT ON eng_relationship
     FOR EACH ROW EXECUTE FUNCTION insert_into_open_revision();
 
--- a revision, once frozen, stays frozen
+-- a revision, once frozen, stays frozen and cannot be deleted or renumbered
 CREATE FUNCTION keep_frozen() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF OLD.frozen AND NOT NEW.frozen THEN
-        RAISE EXCEPTION 'revision % of project % is frozen and cannot be unfrozen', OLD.number, OLD.project_id;
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.frozen THEN
+            RAISE EXCEPTION 'revision % of project % is frozen and cannot be deleted', OLD.number, OLD.project_id;
+        END IF;
+        RETURN OLD;
+    END IF;
+    IF OLD.frozen AND (NOT NEW.frozen OR NEW.number <> OLD.number OR NEW.project_id <> OLD.project_id) THEN
+        RAISE EXCEPTION 'revision % of project % is frozen and cannot be unfrozen or renumbered', OLD.number, OLD.project_id;
     END IF;
     RETURN NEW;
 END $$;
-CREATE TRIGGER revision_keep_frozen BEFORE UPDATE ON revision
+CREATE TRIGGER revision_keep_frozen BEFORE UPDATE OR DELETE ON revision
     FOR EACH ROW EXECUTE FUNCTION keep_frozen();
 
 -- 3. Indexes and uniqueness

@@ -247,8 +247,11 @@ def analyse(net: ElectricalNetwork, rules: RuleContext) -> ElectricalResult:
             div = _diversity(rules, n.kind) if loads > 1 else 1.0
             f = 1.0 / div
             s_child = max((x.s_kva for x in parts), default=0.0)
+            s_sum = sum(x.s_kva for x in parts)
             if s_raw > 0 and s_raw * f < s_child:
                 f = s_child / s_raw            # never below what one outgoing cable carries
+            if s_raw > 0 and s_raw * f > s_sum:
+                f = s_sum / s_raw              # never above what all outgoing cables carry together
             d = NodeDemand(n, rp * f, rq * f, loads, rp, rq, 1.0 / f if f else 1.0)
         demand[n.id] = d
         return d

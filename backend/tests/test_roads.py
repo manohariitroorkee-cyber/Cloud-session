@@ -317,13 +317,30 @@ class RoadAuditRegressionTests(unittest.TestCase):
         d = design_road(self.pr, self.road, road_rules())
         from cityinfra.engineering.roads import cross_section as xs
         tpl = self.road.attr("template")
-        e = d.superelevation(200)                                   # on the left-hand arc at PI1
-        self.assertAlmostEqual(e, -min(50 ** 2 / (225 * 200), 0.07), places=9)
-        _, inner = xs.surface_at(tpl, -7.6, e)                      # inside of a left-hand curve is lower
-        _, outer = xs.surface_at(tpl, 7.6, e)
-        self.assertAlmostEqual(inner, -7.0 * abs(e), places=9)
-        self.assertAlmostEqual(outer, +7.0 * abs(e), places=9)
-        self.assertAlmostEqual(d.superelevation(50), 0.0)           # straight: normal camber
+        g = d.h.groups[0]                                           # left-hand curve at PI1
+        mid = (g.ch_start + g.ch_end) / 2
+        E = min(50 ** 2 / (225 * 200), 0.07)
+        self.assertAlmostEqual(d.superelevation(mid), -E, places=9)
+        sl = d.slopes(mid)
+        _, inner = xs.surface_at(tpl, -7.6, sl)                     # inside of a left-hand curve is lower
+        _, outer = xs.surface_at(tpl, 7.6, sl)
+        self.assertAlmostEqual(inner, -7.0 * E, places=9)
+        self.assertAlmostEqual(outer, +7.0 * E, places=9)
+        self.assertEqual(d.superelevation(50), 0.0)                 # straight: normal camber
+
+    def test_superelevation_has_no_steps(self):
+        # audit N1: the outer edge must rise smoothly through the transition – no jump anywhere
+        d = design_road(self.pr, self.road, road_rules())
+        from cityinfra.engineering.roads import cross_section as xs
+        tpl = self.road.attr("template")
+        prev = None
+        ch = 100.0
+        while ch < 300.0:
+            z = {o: xs.surface_at(tpl, o, d.slopes(ch))[1] for o in (-7.6, 7.6)}
+            if prev:
+                for o in z:
+                    self.assertLess(abs(z[o] - prev[o]), 0.01, f"step at ch {ch:.1f} offset {o}")
+            prev, ch = z, ch + 0.1
 
     def test_empirical_transition_criterion(self):
         # undivided 7 m road at 50 km/h, R = 200 m: 2.7·V²/R = 33.75 m governs over run-off and v³/CR
@@ -333,6 +350,11 @@ class RoadAuditRegressionTests(unittest.TestCase):
         tl = [c for c in d.checks if c.check == "transition_length"]
         self.assertTrue(all(c.status == CheckStatus.FAIL for c in tl))
         self.assertAlmostEqual(tl[0].limit, 2.7 * 50 ** 2 / 200, places=6)
+
+    def test_terrain_is_required(self):
+        del self.road.attributes["terrain"]
+        with self.assertRaises(ValueError):
+            design_road(self.pr, self.road, road_rules())
 
     def test_missing_design_speed_is_reported(self):
         del self.road.attributes["design_speed_kmh"]
