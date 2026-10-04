@@ -83,6 +83,11 @@ class EpanetTests(unittest.TestCase):
         supply = self.res.links[self.pr.by_name("W1").id].flow[0]
         self.assertAlmostEqual(supply, demand, places=4)
 
+    def test_missing_roughness_is_an_error(self):
+        del self.pr.by_name("W3").attributes["roughness"]
+        with self.assertRaises(epanet.EngineError):
+            epanet.run_water(self.pr)
+
     def test_headloss_matches_hazen_williams(self):
         # SI Hazen–Williams: hf = 10.67 L Q^1.852 / (C^1.852 D^4.87)
         q, d, c, length = 0.017, 0.25, 130, 150.0
@@ -90,10 +95,14 @@ class EpanetTests(unittest.TestCase):
         self.assertAlmostEqual(self.res.links[self.pr.by_name("W1").id].headloss[0], hf, delta=0.01 * hf)
 
     def test_pressure_checks_cite_rules(self):
-        rules = RuleContext([RuleSet.load("cpheeo_water_supply.yaml")])
+        bare = RuleContext([RuleSet.load("cpheeo_water_supply.yaml")])
+        # no storeys on the junctions and no project default: not evaluated, never a silent default
+        self.assertTrue(all(c.status == CheckStatus.NOT_EVALUATED for c in pressure_checks(self.pr, self.res, bare)))
+        rules = RuleContext([RuleSet.load("cpheeo_water_supply.yaml"), RuleSet.load("project_water_defaults.yaml")])
         checks = pressure_checks(self.pr, self.res, rules)
         self.assertEqual(len(checks), 5)
         self.assertTrue(all(c.status == CheckStatus.PASS for c in checks))
+        self.assertIn("project default", checks[0].message)
         self.pr.by_name("J5").attributes["storeys"] = 6        # needs 22 m
         self.pr.objects[self.pr.by_name("ESR").id].attributes["head"] = 236.0
         res = epanet.run_water(self.pr)

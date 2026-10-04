@@ -41,6 +41,8 @@ def drainage(project_name: str, res, rules: RuleContext, area_type: str, swmm=No
     L += ["", "## 2. Design criteria used", ""] + _criteria(rules, res.all_checks(), ["runoff_coefficients", "manning_n_drains"])
     if res.errors:
         L += ["", "## Errors – calculation incomplete", ""] + [f"- {e}" for e in res.errors]
+    if getattr(res, "notes", None):
+        L += ["", "Notes:"] + [f"- {n}" for n in res.notes]
     L += ["", "## 3. Rational-method sheet", "",
           "| Drain | From | To | L (m) | Section | Slope 1 in | ΣA (ha) | ΣCA (ha) | tc (min) | i (mm/h) | Q (m³/s) | Q cap (m³/s) | d/D | V (m/s) | Result |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -137,7 +139,8 @@ def electrical(project_name: str, net, res, rules: RuleContext, sched: dict) -> 
          "Short-circuit, protection discrimination and earthing are not covered.", "",
          "## 1. Method", "", f"- {res.method}.", "",
          "## 2. Design criteria and data used", ""] + _criteria(rules, res.checks, [
-             "demand_factors", "diversity_factors", "default_power_factor", "cable_derating_factor"],
+             "demand_factors", "diversity_factors", "default_power_factor", "cable_derating_factor",
+             "lt_nominal_voltage_v"],
              skip=("cable_library",))
     cl = rules.get("cable_library")
     lib = cl.value
@@ -152,12 +155,15 @@ def electrical(project_name: str, net, res, rules: RuleContext, sched: dict) -> 
     if res.errors:
         L += ["", "## Errors – calculation incomplete", ""] + [f"- {e}" for e in res.errors]
         return "\n".join(L) + "\n"
-    L += ["", "## 3. Transformer schedule", "", "| Transformer | Rating (kVA) | Ratio | Fed by | Loads | Demand (kVA) | Loading |",
-          "|---|---|---|---|---|---|---|"]
-    L += [f"| {t['transformer']} | {t['rating_kva']} | {t['ratio']} | {t['fed_by']} | {t['loads']} | {t['demand_kva']} | {t['loading_pct']} % |"
-          for t in sched["transformers"]]
-    L += ["", "## 4. Feeder pillar schedule", "", "| Pillar | Fed by | Outgoing ways | Loads | Demand (kVA) |", "|---|---|---|---|---|"]
-    L += [f"| {p['pillar']} | {p['fed_by']} | {p['outgoing_ways']} | {p['loads']} | {p['demand_kva']} |" for p in sched["feeder_pillars"]]
+    L += ["", "## 3. Transformer schedule", "",
+          "| Transformer | Rating (kVA) | Ratio | Fed by | Loads | Σ load MD (kVA) | Diversity | Demand (kVA) | Loading |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    L += [f"| {t['transformer']} | {t['rating_kva']} | {t['ratio']} | {t['fed_by']} | {t['loads']} | {t['connected_md_kva']} | "
+          f"{t['diversity']} | {t['demand_kva']} | {t['loading_pct']} % |" for t in sched["transformers"]]
+    L += ["", "## 4. Feeder pillar schedule", "", "| Pillar | Fed by | Outgoing ways | Loads | Diversity | Demand (kVA) |",
+          "|---|---|---|---|---|---|"]
+    L += [f"| {p['pillar']} | {p['fed_by']} | {p['outgoing_ways']} | {p['loads']} | {p['diversity']} | {p['demand_kva']} |"
+          for p in sched["feeder_pillars"]]
     L += ["", "## 5. Cable schedule", "",
           "| Cable | From | To | Level | Type | Runs | Length (m) | Current (A) | Capacity (A) | ΔV (%) | Cumulative ΔV (%) |",
           "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -181,7 +187,10 @@ def junction(project_name: str, d, rules: RuleContext) -> str:
          "Scope: geometric design – arm angles, kerb returns, sight triangles; for roundabouts the circle, "
          "entry/exit kerbs, weaving sections and (if flows are given) weaving capacity. Swept-path analysis, "
          "signal design and structural design are not covered.", "",
-         "## 1. Design criteria used", ""] + _criteria(rules, d.checks, [])
+         "## 1. Design criteria used", ""] + _criteria(rules, d.checks, (
+             ["reaction_time_s", "f_longitudinal", "minor_road_setback_m", "major_road_visibility_time_s",
+              "corner_radius_by_vehicle", "min_intersection_angle_deg"] if d.kind == "intersection" else
+             ["roundabout_entry_radius_range_m", "weaving_length_to_width_min", "wardrop_coefficient", "wardrop_validity"]))
     if d.errors:
         L += ["", "## Errors", ""] + [f"- {e}" for e in d.errors]
     L += ["", "## 2. Arms", "", "| Arm | Bearing (°) | Edge left (m) | Edge right (m) | Speed (km/h) | Priority | Road |",
@@ -207,11 +216,12 @@ def junction(project_name: str, d, rules: RuleContext) -> str:
               f"- Central island radius {rb['central_island_radius_m']:.1f} m; circulatory width {rb['circulatory_width_m']:.1f} m; "
               f"inscribed circle diameter {rb['inscribed_diameter_m']:.1f} m.",
               f"- Entry kerb radius {rb['entry_radius_m']:.1f} m; exit kerb radius {rb['exit_radius_m']:.1f} m ({rb['setting']}).",
-              "- Weaving length is measured along the inscribed circle from the end of one arm's entry kerb to the start "
-              "of the next arm's exit kerb (clockwise circulation).", "",
+              "- Weaving length is measured along the middle of the circulating carriageway, between the radial lines "
+              "through the end of one arm's entry kerb and the start of the next arm's exit kerb (clockwise circulation).", "",
               "| Weaving section | Length (m) | Width (m) | Capacity (PCU/h) |", "|---|---|---|---|"]
         L += [f"| {w['section']} | {w['length_m']:.1f} | {w['width_m']:.1f} | "
-              f"{w['capacity_pcu_h']:.0f} |" if 'capacity_pcu_h' in w else
+              f"{w['capacity_pcu_h']:.0f}" + (f" – not reliable: {w['capacity_note']}" if 'capacity_note' in w else "") + " |"
+              if 'capacity_pcu_h' in w else
               f"| {w['section']} | {w['length_m']:.1f} | {w['width_m']:.1f} | – (no flows given) |" for w in rb["weaving"]]
     if d.notes:
         L += ["", "Notes:"] + [f"- {n}" for n in d.notes]

@@ -204,6 +204,10 @@ class Project:
     objects: dict[str, EngineeringObject] = field(default_factory=dict)
     relationships: list[Relationship] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        from ..gis.geometry import require_projected
+        require_projected(self.crs_epsg)
+
     def add(self, obj: EngineeringObject) -> EngineeringObject:
         if obj.id in self.objects:
             raise ValueError(f"duplicate object id {obj.id}")

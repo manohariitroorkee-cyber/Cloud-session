@@ -68,3 +68,10 @@ parameters:
     description: Coefficient in the Wardrop weaving-section capacity formula Qp = 280·w(1+e/w)(1−p/3)/(1+w/l)
     source: {document: "IRC:65", clause: "clause not confirmed"}
     verification: requires_verification
+
+  wardrop_validity:
+    value: {w_m: [6, 18], e_over_w: [0.4, 1.0], w_over_l: [0.12, 0.4], l_m: [18, 90]}
+    unit: "-"
+    description: Range of weaving-section geometry within which the Wardrop formula is applied
+    source: {document: "IRC:65", clause: "clause not confirmed"}
+    verification: requires_verification

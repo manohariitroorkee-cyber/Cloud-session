@@ -76,10 +76,16 @@ class DesignTests(unittest.TestCase):
         self.assertEqual(self.by["S6"].population, 12500)
 
     def test_design_flow_formula(self):
-        # max(150 × 0.8, 100) = 120 lpcd; PF 3.0 (≤20 000); +10 % infiltration
-        d = self.by["S4"]
-        expected = 7000 * 120 / 1000 / 86400 * 3.0 * 1.10
-        self.assertAlmostEqual(d.design_flow, expected, places=12)
+        # 7000 persons × max(150 × 0.8, 100) = 120 lpcd = 9.7222 L/s average;
+        # × peak factor 3.0 (≤ 20 000) × 1.10 infiltration = 32.0833 L/s
+        self.assertAlmostEqual(self.by["S4"].design_flow * 1000, 32.083333, places=5)
+
+    def test_diameter_reduction_and_crown_matching(self):
+        res = design_network(build_network(sample_sewer_project()), sewer_rules())
+        c = {(x.object_label, x.check): x.status for x in res.node_checks}
+        self.assertEqual(c[("MH6", "diameter_reduction")], CheckStatus.FAIL)      # 300 mm → 150 mm
+        self.assertEqual(c[("MH5", "diameter_reduction")], CheckStatus.PASS)
+        self.assertEqual(c[("MH3", "crown_matching")], CheckStatus.WARNING)       # 200 → 250 mm, crown higher
 
     def test_expected_failures_and_alternatives(self):
         status = lambda p, c: next(x.status for x in self.by[p].checks if x.check == c)
@@ -92,7 +98,7 @@ class DesignTests(unittest.TestCase):
 
     def test_every_rule_check_cites_a_source(self):
         for c in self.res.all_checks():
-            if c.check not in ("capacity", "invert_continuity"):
+            if c.check not in ("capacity", "invert_continuity", "diameter_reduction", "crown_matching"):
                 self.assertIsNotNone(c.parameter, c.check)
                 self.assertTrue(c.as_dict()["source"])
 

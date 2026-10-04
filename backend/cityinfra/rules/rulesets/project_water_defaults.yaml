@@ -1,0 +1,12 @@
+# Project decisions for water supply – confirm per project.
+id: project_water_defaults
+title: Project water-supply design decisions (defaults – confirm per project)
+source_document: Project design basis report
+
+parameters:
+  design_storeys:
+    value: 2
+    unit: storeys
+    description: Number of storeys to be supplied directly, used where a junction does not state its own
+    source: {clause: "Design basis", note: "Set from the development control norms for the area"}
+    verification: project_decision

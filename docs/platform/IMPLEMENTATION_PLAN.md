@@ -20,12 +20,18 @@ Legend: **done** = implemented and tested · **partial** = foundation in place �
 | — | GIS frontend (MapLibre, drawing, snapping, measurement, undo/redo, layers, results on map) | pending | stage 2 |
 | — | Revisions: compare / rollback services | pending | schema ready; services stage 2 |
 | 11 | Storm-water drainage – hydraulic design | done | Catchments (composite C, Kirpich/inlet time), project IDF (power or table form, no default), Rational-method sheet with iterated time of concentration, circular/rectangular/trapezoidal/box sections, capacity, d/D, freeboard, velocities, return-period check, size alternatives; SWMM runoff + dynamic-wave routing with alternating-block design storm, flooding and surcharge |
-| 12 | Roads – alignment and curve design | done | Horizontal: circular curves + clothoid transitions, chainage, station/offset; checks R_min, transition length (centrifugal-acceleration and superelevation run-off). Vertical: grades, parabolic curves; checks max/min grade, curve length for SSD (crest and headlight sag). TIN ground, long-section, cross-section surface geometry, utilities whose cover level must follow the road (and change-impact links) |
+| 12 | Roads – alignment and curve design | done | Any shape drawn: PI polyline (simple, equal/unequal transitions, spiral–spiral, compound with or without transitions), element chain (hairpins > 180°, loops, S-curves through zero curvature), CAD polyline with arcs (kinks reported), freehand trace (tangents and radii fitted, reverse curves, deviation reported). Exact clothoid evaluation. Checks: R_min (incl. spiral–spiral), transition length for every change of curvature (centrifugal, run-off, empirical), missing transitions, broken-back, reverse-curve tangent, compound ratio, kinks; symmetric and unsymmetrical vertical curves with SSD and sag comfort; superelevation in sections; utility level coordination |
+| 12a | Junction design | done | Intersections (T, Y, cross, multi-leg): arm angles, kerb returns (simple or three-centred, fitted tangent to both carriageway edges), sight triangles (uncontrolled / priority) with obstruction search; roundabouts: inscribed circle, entry/exit kerb fillets, weaving lengths, Wardrop capacity within its validity range. Swept-path analysis and signal design pending |
 | 13 | Electrical distribution | done | Radial substation → HT cable → transformer → LT cable → feeder pillar/pole → load; demand factors and per-level diversity (P and Q), transformer loading, cable current with derating and parallel runs, three- and single-phase voltage drop cumulative from the source bus, cable-size / transformer-rating proposals, transformer, pillar, cable and load schedules. Cable data from a library file – the shipped library is SAMPLE data. Pending: short-circuit, protection, earthing, meshed-network load flow |
 | — | PNG / gas | pending | stage 5 – candidate engine pandapipes |
 | — | Telecom / fibre (ducts, chambers, capacity) | pending | stage 5 |
 | — | Quantities / BOQ / drawings (plan, L-section, schedules, DXF/PDF) | pending | schema for quantities & rates ready |
 | — | Utility corridor & crossing clash detection | pending | uses `z_min/z_max` + PostGIS 3-D queries |
+
+## Independent audit
+
+An independent review on 4 Oct 2026 found 1 critical, 7 major and 11 minor issues; all confirmed
+findings are fixed and covered by regression tests. See `AUDIT_2026-10-04.md`.
 
 ## Out of scope (by decision of 4 Oct 2026)
 

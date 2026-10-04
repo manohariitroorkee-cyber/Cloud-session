@@ -147,11 +147,13 @@ def main(argv=None) -> int:
         from .engines.epanet.adapter import run_water
         from .engineering.water.checks import pressure_checks
         res = run_water(pr)
-        rules = RuleContext([RuleSet.load("cpheeo_water_supply.yaml")])
+        rules = RuleContext([RuleSet.load("cpheeo_water_supply.yaml"), RuleSet.load("project_water_defaults.yaml")])
         lines = [f"# Water network check – {pr.name}", "", "CALCULATION – NOT CHECKED, NOT APPROVED.", "",
                  f"Engine: EPANET {res.run.engine_version} ({res.run.status})", ""]
         lines += [f"- {c.object_label}: {c.status.value} – {c.message} [{c.parameter.source.cite()}; "
                   f"{c.parameter.verification.value}]" for c in pressure_checks(pr, res, rules)]
+        p_st = rules.get("design_storeys")
+        lines += ["", f"Project default storeys: {p_st.value} ({p_st.source.cite()}; {p_st.verification.value})"]
         text = "\n".join(lines) + "\n"
 
     if args.output:

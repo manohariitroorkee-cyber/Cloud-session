@@ -287,3 +287,54 @@ class RoadDesignTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RoadAuditRegressionTests(unittest.TestCase):
+    def setUp(self):
+        self.pr = sample_road_project()
+        self.road = self.pr.by_name("R1")
+
+    def test_spiral_spiral_gets_min_radius_check(self):
+        self.road.attributes["curves"] = {"1": {"type": "spiral_spiral", "R": 40}, "2": [200, 60]}
+        d = design_road(self.pr, self.road, road_rules())
+        mr = [c for c in d.checks if c.check == "min_radius" and "PI1" in c.object_label]
+        self.assertEqual([c.status for c in mr], [CheckStatus.FAIL])
+        self.assertAlmostEqual(mr[0].actual, 40.0)
+
+    def test_unsymmetrical_vertical_curve_checked_by_sharper_leg(self):
+        self.road.attributes["profile"] = [[0, 216.4, 0], [200, 215.6, 5, 145], ["end", 216.9, 0]]
+        d = design_road(self.pr, self.road, road_rules())
+        vc = next(c for c in d.checks if c.check == "vertical_curve_length")
+        self.assertEqual(vc.status, CheckStatus.FAIL)
+        self.assertAlmostEqual(vc.actual, 5 * 150 / 145, places=9)
+
+    def test_one_sided_vertical_curve_rejected(self):
+        self.road.attributes["profile"] = [[0, 216.4, 0], [200, 214.6, 40, 0], ["end", 216.9, 0]]
+        d = design_road(self.pr, self.road, road_rules())
+        self.assertTrue(any("zero length" in e for e in d.errors))
+
+    def test_superelevation_on_curve(self):
+        d = design_road(self.pr, self.road, road_rules())
+        from cityinfra.engineering.roads import cross_section as xs
+        tpl = self.road.attr("template")
+        e = d.superelevation(200)                                   # on the left-hand arc at PI1
+        self.assertAlmostEqual(e, -min(50 ** 2 / (225 * 200), 0.07), places=9)
+        _, inner = xs.surface_at(tpl, -7.6, e)                      # inside of a left-hand curve is lower
+        _, outer = xs.surface_at(tpl, 7.6, e)
+        self.assertAlmostEqual(inner, -7.0 * abs(e), places=9)
+        self.assertAlmostEqual(outer, +7.0 * abs(e), places=9)
+        self.assertAlmostEqual(d.superelevation(50), 0.0)           # straight: normal camber
+
+    def test_empirical_transition_criterion(self):
+        # undivided 7 m road at 50 km/h, R = 200 m: 2.7·V²/R = 33.75 m governs over run-off and v³/CR
+        self.road.attributes["template"] = {"strips": [{"type": "carriageway", "width": 3.5, "crossfall_pct": -2.5}]}
+        self.road.attributes["curves"] = {"1": [200, 30], "2": [200, 30]}
+        d = design_road(self.pr, self.road, road_rules())
+        tl = [c for c in d.checks if c.check == "transition_length"]
+        self.assertTrue(all(c.status == CheckStatus.FAIL for c in tl))
+        self.assertAlmostEqual(tl[0].limit, 2.7 * 50 ** 2 / 200, places=6)
+
+    def test_missing_design_speed_is_reported(self):
+        del self.road.attributes["design_speed_kmh"]
+        with self.assertRaises(ValueError):
+            design_road(self.pr, self.road, road_rules())

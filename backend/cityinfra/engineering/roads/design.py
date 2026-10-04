@@ -31,7 +31,7 @@ from ...rules.framework import CheckResult, CheckStatus, RuleContext
 from . import cross_section as xs
 from . import alignment as hz
 from .horizontal import HorizontalAlignment
-from .vertical import VIP, TIN, VerticalAlignment, crest_length_for, sag_length_for, ssd
+from .vertical import VIP, TIN, VerticalAlignment, crest_length_for, sag_comfort_length, sag_length_for, ssd
 
 METHOD = ("Horizontal: chain of straights, circular arcs and clothoids (any combination) evaluated exactly "
           "(Gauss–Legendre for clothoids); vertical: symmetric or unsymmetrical parabolic curves; ground: linear TIN")
@@ -49,6 +49,10 @@ class RoadDesign:
     sections: list[xs.Section]
     checks: list[CheckResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    e_at: object = None             # chainage -> superelevation (fraction, + right-hand)
+
+    def superelevation(self, ch: float) -> float:
+        return self.e_at(ch) if self.e_at else 0.0
 
     def long_section(self, step: float = 20.0, tin: TIN | None = None) -> list[dict]:
         rows, ch = [], 0.0
@@ -100,10 +104,16 @@ def horizontal_of(road: EngineeringObject) -> HorizontalAlignment:
 
 
 def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> RoadDesign:
+    if road.attr("design_speed_kmh") is None:
+        raise ValueError(f"Road {road.label}: design_speed_kmh is required.")
+    if not road.attr("template"):
+        raise ValueError(f"Road {road.label}: a cross-section template is required.")
     try:
         h = horizontal_of(road)
     except (ValueError, KeyError) as e:
         raise ValueError(f"Road {road.label}: {e}") from e
+    if not h.elements:
+        raise ValueError(f"Road {road.label}: the horizontal alignment has no elements.")
     prof = [list(p) for p in road.attr("profile")]
     if prof and prof[-1][0] in ("end", None):
         prof[-1][0] = h.length
@@ -114,6 +124,11 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
                       f"(use \"end\" as the last chainage to follow the alignment).")
     tpl = road.attr("template")
     tin = terrain(pr)
+    V = float(road.attr("design_speed_kmh"))
+    emax, div = rules.value("e_max"), rules.value("e_design_divisor")
+    def e_at(ch: float) -> float:
+        k = h.curvature(ch)
+        return 0.0 if abs(k) < 1e-12 else math.copysign(min(V * V * abs(k) / div, emax), k)
     sections: list[xs.Section] = []
     if tin is None:
         errors.append("No terrain points: ground profile and cross-section ground lines not available.")
@@ -124,8 +139,8 @@ def design_road(pr: Project, road: EngineeringObject, rules: RuleContext) -> Roa
             chs.append(h.length)
         for ch in chs:
             ground = (lambda off, ch=ch: tin.level(*h.offset_point(ch, off))) if tin else (lambda off: None)
-            sections.append(xs.section_at(ch, v.level(ch), tpl, ground))
-    d = RoadDesign(road, h, v, sections, errors=errors)
+            sections.append(xs.section_at(ch, v.level(ch), tpl, ground, e=e_at(ch)))
+    d = RoadDesign(road, h, v, sections, errors=errors, e_at=e_at)
     d.checks = _checks(d, rules)
     return d
 
@@ -144,10 +159,14 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
     e_of = lambda k: 0.0 if abs(k) < 1e-12 else math.copysign(
         min(V * V * abs(k) / rules.value("e_design_divisor"), e_max.value), k)
 
+    emp = rules.get("transition_empirical_coeff")
+    emp_c = emp.value[r.attr("terrain", "plain")]
+
     def ls_required(k0: float, k1: float) -> tuple[float, float, float]:
-        """(required length, centrifugal criterion, run-off criterion) for a change of curvature k0 → k1."""
+        """(required length, centrifugal criterion, run-off criterion) for a change of curvature k0 → k1.
+        The run-off criterion here also covers the empirical IRC form Ls = c·V²/R (c by terrain)."""
         l1 = v ** 3 * abs(k1 - k0) / C
-        l2 = abs(e_of(k1) - e_of(k0)) * npar.value * w_rot
+        l2 = max(abs(e_of(k1) - e_of(k0)) * npar.value * w_rot, emp_c * V * V * abs(k1 - k0))
         return max(l1, l2), l1, l2
 
     shift_par = rules.get("transition_required_shift_m")
@@ -164,6 +183,12 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
                 out.append(CheckResult("min_radius", r.id, lbl, CheckStatus.PASS if R >= rmin - 1e-9 else CheckStatus.FAIL,
                                        f"R {R:.1f} m vs R_min {rmin:.1f} m = V²/127(e+f) at {V:.0f} km/h",
                                        R, rmin, "m", e_max))
+        if not any(e.kind == "arc" and e.length > 1e-9 for e in g.elements):
+            kmax = max(max(abs(e.k0), abs(e.k1)) for e in g.elements)
+            R = 1 / kmax
+            out.append(CheckResult("min_radius", r.id, lbl, CheckStatus.PASS if R >= rmin - 1e-9 else CheckStatus.FAIL,
+                                   f"Sharpest radius reached in the transitions {R:.1f} m vs R_min {rmin:.1f} m "
+                                   f"= V²/127(e+f) at {V:.0f} km/h", R, rmin, "m", e_max))
         # every change of curvature inside the group and at its two ends
         idx0 = els.index(g.elements[0])
         seq = ([els[idx0 - 1]] if idx0 > 0 else []) + g.elements + \
@@ -176,7 +201,7 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
                     "transition_length", r.id, f"{lbl} spiral R {hz._r(e.k0)} → {hz._r(e.k1)}",
                     CheckStatus.PASS if e.length >= need - 1e-6 else CheckStatus.FAIL,
                     f"Ls {e.length:.1f} m vs required {need:.1f} m (v³·Δk/C = {l1:.1f} m with C = {C:.2f}; "
-                    f"run-off Δe·N·W = {l2:.1f} m, W = {w_rot:.2f} m)", e.length, need, "m", cpar))
+                    f"larger of run-off Δe·N·W and {emp_c}·V²·Δk = {l2:.1f} m, W = {w_rot:.2f} m)", e.length, need, "m", cpar))
             if j > 0:
                 a_, b_ = seq[j - 1], e
                 ka, kb = a_.k1, b_.k0
@@ -238,15 +263,29 @@ def _checks(d: RoadDesign, rules: RuleContext) -> list[CheckResult]:
     for i, g1, g2, L, kind in d.v.curves():
         A = abs(g2 - g1)
         lbl = f"{r.label} VC at ch {d.v.vips[i].chainage:.0f} ({kind})"
+        basis = f"SSD {S:.0f} m"
         if kind == "crest":
             need = crest_length_for(S, A, rules.value("eye_height_m"), rules.value("object_height_m"))
         else:
             need = sag_length_for(S, A, rules.value("headlight_height_m"), rules.value("headlight_beam_deg"))
-        need = max(need, rules.value("min_vertical_curve_m") if A > 0 else 0)
+            comfort = sag_comfort_length(V, A, rules.value("sag_comfort_c_rate"))
+            if comfort > need:
+                need, basis = comfort, "comfort 2√(A·v³/C), which exceeds the headlight-SSD length"
+        vmin = rules.value("min_vertical_curve_m") if A > 0 else 0
+        if vmin > need:
+            need, basis = vmin, f"project minimum length (sight distance needs only {need:.0f} m)"
+        vip = d.v.vips[i]
+        if vip.l2 is not None and A > 0:
+            La, Lb = d.v.equivalent_lengths(i)
+            Leff = min(La, Lb)
+            what = (f"unsymmetrical {vip.la:.0f} m + {vip.lb:.0f} m; sharper leg equivalent to a symmetric "
+                    f"curve of {Leff:.1f} m")
+        else:
+            Leff, what = L, f"L {L:.0f} m"
         out.append(CheckResult("vertical_curve_length", r.id, lbl,
-                               CheckStatus.PASS if L >= need - 1e-6 else CheckStatus.FAIL,
-                               f"L {L:.0f} m vs required {need:.0f} m for SSD {S:.0f} m, A = {A*100:.2f} %",
-                               L, need, "m", fpar))
+                               CheckStatus.PASS if Leff >= need - 1e-6 else CheckStatus.FAIL,
+                               f"{what} vs required {need:.0f} m ({basis}, A = {A*100:.2f} %)",
+                               Leff, need, "m", fpar))
     return out
 
 
@@ -272,7 +311,7 @@ def level_impacts(pr: Project, d: RoadDesign, tolerance_m: float = 0.05) -> list
             ch, off = d.h.station(pt)
             if abs(off) > W or ch <= 0 or ch >= d.h.length:
                 continue
-            strip, dz = xs.surface_at(tpl, off)
+            strip, dz = xs.surface_at(tpl, off, d.superelevation(ch))
             z = d.v.level(ch) + dz
             for t in (RelationType.LOCATED_IN, RelationType.DEPENDS_ON_LEVEL):
                 if (o.id, d.road.id, t) not in existing:
@@ -280,6 +319,7 @@ def level_impacts(pr: Project, d: RoadDesign, tolerance_m: float = 0.05) -> list
             diff = z - float(o.attr(key))
             if abs(diff) > tolerance_m:
                 out.append({"object_id": o.id, "object": o.label, "kind": kind.value, "chainage": round(ch, 2),
-                            "offset": round(off, 2), "strip": strip, "current_level": o.attr(key),
+                            "offset": round(off, 2), "strip": strip,
+                            "superelevation_pct": round(d.superelevation(ch) * 100, 2), "current_level": o.attr(key),
                             "road_surface_level": round(z, 3), "difference_m": round(diff, 3)})
     return out

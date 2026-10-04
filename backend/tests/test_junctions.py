@@ -82,6 +82,18 @@ class IntersectionTests(unittest.TestCase):
         self.assertTrue(point_in_polygon(((t.polygon[0][0] + t.polygon[1][0] + t.polygon[2][0]) / 3,
                                           (t.polygon[0][1] + t.polygon[1][1] + t.polygon[2][1]) / 3), t.polygon))
 
+    def test_no_silent_defaults(self):
+        j = self.pr.by_name("J-CROSS")
+        for a in j.attributes["arms"]:
+            a.pop("priority", None)
+        d = design_junction(self.pr, j, self.rules)
+        self.assertEqual(status(d, "intersection_angle"), [CheckStatus.NOT_EVALUATED])
+        del j.attributes["arms"][0]["speed_kmh"]
+        self.assertTrue(any("speed_kmh missing" in e for e in design_junction(self.pr, j, self.rules).errors))
+        jt = self.pr.by_name("J-T")
+        del jt.attributes["design_vehicle"]
+        self.assertTrue(any("design_vehicle missing" in e for e in design_junction(self.pr, jt, self.rules).errors))
+
     def test_errors(self):
         j = self.pr.by_name("J-CROSS")
         j.attributes["design_vehicle"] = "spaceship"
@@ -111,10 +123,10 @@ class RoundaboutTests(unittest.TestCase):
             self.assertAlmostEqual(math.dist(fx, c), Ro + rb["exit_radius_m"], places=9)
 
     def test_weaving_length_by_hand(self):
-        Ro, Ren, Rex, w = 37.0, 20.0, 25.0, 7.0
+        Ro, Ren, Rex, w, Rmid = 37.0, 20.0, 25.0, 7.0, 27.0 + 10.0 / 2
         a_en = math.atan2(w + Ren, math.sqrt((Ro + Ren) ** 2 - (w + Ren) ** 2))         # N entry tangent bearing
         a_ex = math.atan2(math.sqrt((Ro + Rex) ** 2 - (w + Rex) ** 2), w + Rex)         # E exit tangent bearing
-        expect = Ro * (a_ex - a_en)
+        expect = Rmid * (a_ex - a_en)
         got = next(x for x in self.d.roundabout["weaving"] if x["section"] == "N→E")["length_m"]
         self.assertAlmostEqual(got, expect, places=9)
         self.assertEqual(set(status(self.d, "weaving_length")), {CheckStatus.FAIL})
@@ -123,6 +135,17 @@ class RoundaboutTests(unittest.TestCase):
         w = next(x for x in self.d.roundabout["weaving"] if x["section"] == "N→E")
         ww, e, l, p = 10.0, 7.0, w["length_m"], 0.5
         self.assertAlmostEqual(w["capacity_pcu_h"], 280 * ww * (1 + e / ww) * (1 - p / 3) / (1 + ww / l), places=9)
+        # the sample section is far too short for the formula: capacity must not be relied on
+        self.assertEqual(status(self.d, "weaving_capacity"), [CheckStatus.NOT_EVALUATED])
+        self.assertIn("w/l", w["capacity_note"])
+
+    def test_wardrop_within_validity(self):
+        j = self.pr.by_name("J-RB")
+        j.attributes["roundabout"].update(central_island_radius_m=45)
+        d = design_junction(self.pr, j, j_rules())
+        w = next(x for x in d.roundabout["weaving"] if x["section"] == "N→E")
+        self.assertNotIn("capacity_note", w)
+        self.assertIn(status(d, "weaving_capacity")[0], (CheckStatus.PASS, CheckStatus.FAIL))
 
     def test_island_and_radius_checks(self):
         self.assertEqual(status(self.d, "central_island_radius"), [CheckStatus.PASS])

@@ -17,10 +17,19 @@ from typing import Any, Sequence
 Coord = Sequence[float]
 
 # Geographic CRSs (degrees) must not be used for engineering measurement.
-GEOGRAPHIC_EPSG = {4326, 4269, 4258, 4283, 7844}
+# Common ones are listed; with pyproj installed (API layer) every code is checked.
+GEOGRAPHIC_EPSG = {4326, 4269, 4258, 4283, 7844, 4674, 4019, 4240, 4146, 4755, 4979}
 
 
 def require_projected(epsg: int) -> None:
+    try:                                   # authoritative check when pyproj is available
+        from pyproj import CRS              # type: ignore
+        if CRS.from_epsg(epsg).is_geographic:
+            raise ValueError(f"EPSG:{epsg} is geographic (degrees). Engineering geometry must be in a "
+                             "projected metric CRS, e.g. EPSG:32643 (UTM 43N) for Delhi.")
+        return
+    except ImportError:
+        pass
     if epsg in GEOGRAPHIC_EPSG:
         raise ValueError(
             f"EPSG:{epsg} is geographic (degrees). Engineering geometry must be in a "
@@ -65,6 +74,8 @@ def deflection_deg(a: Coord, b: Coord, c: Coord) -> float:
 def polygon_area(geom: dict[str, Any]) -> float:
     """Planar area (m²) of a Polygon/MultiPolygon, holes subtracted."""
     def ring(r: list[Coord]) -> float:
+        if tuple(r[0][:2]) != tuple(r[-1][:2]):        # tolerate unclosed rings
+            r = list(r) + [r[0]]
         return 0.5 * sum(r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1] for i in range(len(r) - 1))
 
     def poly(rings: list[list[Coord]]) -> float:

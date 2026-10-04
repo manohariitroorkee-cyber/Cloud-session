@@ -16,8 +16,11 @@ ELECTRICAL_CABLE LineString drawn from the supply end to the load end.
 Method (hand-calculation method for radial networks; no load-flow engine)
 -------------------------------------------------------------------------
 * Demand at a load: P = connected kW × demand factor; Q = P·tan(acos pf).
-* Demand at a pillar / transformer / substation: (ΣP, ΣQ of everything downstream)
-  ÷ diversity factor for that level; S = √(P² + Q²).
+* Demand at a pillar / transformer / substation: (ΣP, ΣQ of the maximum demands of
+  ALL loads downstream) ÷ the diversity factor for that level.  Diversity is applied
+  once per level to the load sum – never compounded on already-diversified figures –
+  and only where more than one load is served.  A node's demand is never taken
+  below the largest demand it passes on to a single outgoing cable.
 * Current in a three-phase cable: I = S / (√3 · V_LL); single-phase service: I = S / V_ph.
 * Voltage drop: three-phase ΔV = √3 · I · L · (R cosφ + X sinφ) / runs;
   single-phase ΔV = 2 · I · L · (R cosφ + X sinφ) / runs, as % of the nominal voltage.
@@ -119,6 +122,8 @@ def build_network(pr: Project, rules: RuleContext) -> ElectricalNetwork:
                     errors.append(f"Transformer {n.label}: {k} missing.")
         if n.kind == ObjectKind.ELECTRICAL_LOAD and n.attr("connected_load_kw") is None:
             errors.append(f"Load {n.label}: connected_load_kw missing.")
+        if n.kind == ObjectKind.ELECTRICAL_LOAD and n.attr("demand_factor") is None and n.attr("category") is None:
+            errors.append(f"Load {n.label}: give a category (for the demand factor) or a demand_factor.")
         if n.kind == ObjectKind.SUBSTATION and n.attr("voltage_kv") is None:
             errors.append(f"Substation {n.label}: voltage_kv missing.")
 
@@ -137,7 +142,9 @@ def build_network(pr: Project, rules: RuleContext) -> ElectricalNetwork:
                     errors.append(f"Transformer {n.label}: fed from the LT side.")
                 elif n.attr("hv_kv") and abs(float(n.attr("hv_kv")) * 1000 - v) > 1:
                     errors.append(f"Transformer {n.label}: HV rating {n.attr('hv_kv')} kV ≠ supply {v/1000:g} kV.")
-                level, v = "LT", float(n.attr("lv_v") or 0)
+                # currents and % drops on the LT side use the system nominal voltage (a project
+                # parameter), not the transformer's no-load secondary voltage
+                level, v = "LT", float(rules.value("lt_nominal_voltage_v"))
             for c in children.get(n.id, []):
                 c.level, c.v_nominal = level, v
                 spec = lib[c.type]
@@ -158,9 +165,12 @@ def build_network(pr: Project, rules: RuleContext) -> ElectricalNetwork:
 @dataclass
 class NodeDemand:
     obj: EngineeringObject
-    p_kw: float
+    p_kw: float               # diversified maximum demand at this node
     q_kvar: float
     loads: int
+    raw_p_kw: float = 0.0     # sum of the maximum demands of all loads downstream
+    raw_q_kvar: float = 0.0
+    diversity: float = 1.0    # effective factor applied (raw / diversified)
 
     @property
     def s_kva(self) -> float:
@@ -217,9 +227,9 @@ def analyse(net: ElectricalNetwork, rules: RuleContext) -> ElectricalResult:
         if n.id in demand:
             return demand[n.id]
         if n.kind == ObjectKind.ELECTRICAL_LOAD:
-            cat = n.attr("category", "residential")
             df = n.attr("demand_factor")
             if df is None:
+                cat = n.attr("category")
                 if cat not in dfs:
                     errors.append(f"Load {n.label}: no demand factor configured for category '{cat}'.")
                     df = 1.0
@@ -227,12 +237,19 @@ def analyse(net: ElectricalNetwork, rules: RuleContext) -> ElectricalResult:
                     df = dfs[cat]
             pf = float(n.attr("power_factor", pf_default))
             p = float(n.attr("connected_load_kw")) * float(df)
-            d = NodeDemand(n, p, p * math.tan(math.acos(pf)), 1)
+            q = p * math.tan(math.acos(pf))
+            d = NodeDemand(n, p, q, 1, p, q, 1.0)
         else:
             parts = [node_demand(c.down) for c in net.children.get(n.id, [])]
-            div = _diversity(rules, n.kind)
-            d = NodeDemand(n, sum(x.p_kw for x in parts) / div, sum(x.q_kvar for x in parts) / div,
-                           sum(x.loads for x in parts))
+            rp, rq = sum(x.raw_p_kw for x in parts), sum(x.raw_q_kvar for x in parts)
+            loads = sum(x.loads for x in parts)
+            s_raw = math.hypot(rp, rq)
+            div = _diversity(rules, n.kind) if loads > 1 else 1.0
+            f = 1.0 / div
+            s_child = max((x.s_kva for x in parts), default=0.0)
+            if s_raw > 0 and s_raw * f < s_child:
+                f = s_child / s_raw            # never below what one outgoing cable carries
+            d = NodeDemand(n, rp * f, rq * f, loads, rp, rq, 1.0 / f if f else 1.0)
         demand[n.id] = d
         return d
 
@@ -387,7 +404,8 @@ def schedules(net: ElectricalNetwork, res: ElectricalResult, rules: RuleContext)
             d = res.demand[n.id]
             tx.append({"transformer": n.label, "rating_kva": n.attr("rating_kva"),
                        "ratio": f"{n.attr('hv_kv')} kV / {n.attr('lv_v')} V", "fed_by": net.feeding[n.id].obj.label,
-                       "loads": d.loads, "demand_kva": round(d.s_kva, 1),
+                       "loads": d.loads, "connected_md_kva": round(math.hypot(d.raw_p_kw, d.raw_q_kvar), 1),
+                       "diversity": round(d.diversity, 3), "demand_kva": round(d.s_kva, 1),
                        "loading_pct": round(d.s_kva / float(n.attr("rating_kva")) * 100, 1)})
     pillars = []
     for n in net.nodes.values():
@@ -395,7 +413,7 @@ def schedules(net: ElectricalNetwork, res: ElectricalResult, rules: RuleContext)
             d = res.demand[n.id]
             pillars.append({"pillar": n.label, "kind": n.kind.value, "fed_by": net.feeding[n.id].obj.label,
                             "outgoing_ways": len(net.children.get(n.id, [])), "loads": d.loads,
-                            "demand_kva": round(d.s_kva, 1)})
+                            "diversity": round(d.diversity, 3), "demand_kva": round(d.s_kva, 1)})
     cables = []
     for cr in res.cables.values():
         c, spec = cr.cable, lib[cr.cable.type]
@@ -408,7 +426,7 @@ def schedules(net: ElectricalNetwork, res: ElectricalResult, rules: RuleContext)
     for n in net.nodes.values():
         if n.kind == ObjectKind.ELECTRICAL_LOAD:
             d = res.demand[n.id]
-            loads.append({"load": n.label, "category": n.attr("category", "residential"),
+            loads.append({"load": n.label, "category": n.attr("category", "–"),
                           "connected_kw": n.attr("connected_load_kw"), "demand_kw": round(d.p_kw, 2),
                           "pf": round(d.pf, 2), "phases": n.attr("phases", 3), "fed_by": net.feeding[n.id].obj.label})
     return {"transformers": tx, "feeder_pillars": pillars, "cables": cables, "loads": loads}

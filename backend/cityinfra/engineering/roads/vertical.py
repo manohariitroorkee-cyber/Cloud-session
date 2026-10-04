@@ -51,6 +51,9 @@ class VerticalAlignment:
                 self.errors.append(f"Vertical curve at ch {v[i].chainage:.1f} overlaps the previous curve.")
             if i == len(v) - 2 and hi > v[-1].chainage + 1e-9:
                 self.errors.append(f"Vertical curve at ch {v[i].chainage:.1f} runs past the profile end.")
+            if (v[i].la > 0) != (v[i].lb > 0):
+                self.errors.append(f"Vertical curve at ch {v[i].chainage:.1f}: one side has zero length, which leaves "
+                                   f"a grade break at the VIP – give both lengths.")
 
     def grade(self, i: int) -> float:
         a, b = self.vips[i], self.vips[i + 1]
@@ -77,6 +80,14 @@ class VerticalAlignment:
                 return v[i].level + self.grade(i) * (ch - v[i].chainage)
         raise AssertionError
 
+    def equivalent_lengths(self, i: int) -> tuple[float, float]:
+        """Lengths of the symmetric curves having the same rate of change of grade as each
+        leg of an unsymmetrical curve: La·(La+Lb)/Lb and Lb·(La+Lb)/La."""
+        la, lb = self.vips[i].la, self.vips[i].lb
+        if la <= 0 or lb <= 0:
+            return 0.0, 0.0
+        return la * (la + lb) / lb, lb * (la + lb) / la
+
     def curves(self):
         """(index, g1, g2, L, kind) for every interior VIP."""
         out = []
@@ -99,6 +110,13 @@ def crest_length_for(S: float, A: float, h1: float, h2: float) -> float:
     k = (math.sqrt(2 * h1) + math.sqrt(2 * h2)) ** 2
     L = A * S * S / k
     return L if L >= S else max(0.0, 2 * S - k / A)
+
+
+def sag_comfort_length(speed_kmh: float, A: float, c_rate: float) -> float:
+    """Valley curve length for comfort: L = 2·√(A·v³ / C) (v in m/s, C rate of change of
+    centrifugal acceleration), i.e. 0.38·√(A·V³) for C = 0.6 m/s³ and V in km/h."""
+    v = speed_kmh / 3.6
+    return 2 * math.sqrt(A * v ** 3 / c_rate) if A > 0 else 0.0
 
 
 def sag_length_for(S: float, A: float, h: float, beam_deg: float) -> float:

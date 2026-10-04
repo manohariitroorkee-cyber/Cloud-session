@@ -144,3 +144,26 @@ class DrainageSwmmTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DrainageAuditRegressionTests(unittest.TestCase):
+    def test_kirpich_against_imperial_original(self):
+        # Kirpich (1940): tc [min] = 0.0078 · L_ft^0.77 · S^-0.385 ; L in metres × 3.28084
+        L_m, S = 1000.0, 0.01
+        imperial = 0.0078 * (L_m * 3.28084) ** 0.77 * S ** -0.385
+        self.assertAlmostEqual(kirpich_tc_min(L_m, S), imperial, delta=0.01 * imperial)
+
+    def test_surcharged_drain_travel_time_uses_capacity_velocity(self):
+        pr = sample_drainage_project()
+        rules = drain_rules()
+        res = design_network(build_network(pr, rules), rules, IDF_, 5, "residential")
+        d2 = next(d for d in res.drains if d.drain.obj.name == "D2")
+        self.assertFalse(d2.state.capacity_ok)
+        v_cap = d2.state.q_capacity / d2.drain.section.full_area()
+        self.assertAlmostEqual(d2.travel_min, d2.drain.length / v_cap / 60, places=9)
+        self.assertTrue(any("D2: surcharged" in n for n in res.notes))
+
+    def test_lining_is_required(self):
+        pr = sample_drainage_project()
+        del pr.by_name("D1").attributes["lining"]
+        self.assertTrue(any("lining missing" in e for e in build_network(pr, drain_rules()).errors))

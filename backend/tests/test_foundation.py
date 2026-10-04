@@ -96,3 +96,53 @@ class GeoJsonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditRegressionTests(unittest.TestCase):
+    """Findings of the independent audit of 4 Oct 2026 – kept as regression tests."""
+
+    def _fc(self, crs=None, status=None):
+        from cityinfra.samples import sample_sewer_project
+        fc = export_feature_collection(sample_sewer_project())
+        if crs is None:
+            fc.pop("crs")
+        else:
+            fc["crs"]["properties"]["name"] = crs
+        if status:
+            fc["features"][0]["properties"]["status"] = status
+        return fc
+
+    def test_geojson_without_crs_is_refused(self):
+        probs = import_feature_collection(Project("x", 32643), self._fc(crs=None))
+        self.assertIn("declares no coordinate system", probs[0])
+
+    def test_geographic_geojson_is_refused(self):
+        for name in ("urn:ogc:def:crs:OGC:1.3:CRS84", "urn:ogc:def:crs:EPSG::4326"):
+            probs = import_feature_collection(Project("x", 32643), self._fc(crs=name))
+            self.assertIn("geographic", probs[0])
+
+    def test_project_must_use_projected_crs(self):
+        with self.assertRaises(ValueError):
+            Project("x", 4326)
+
+    def test_import_cannot_set_approved(self):
+        pr = Project("x", 32643)
+        probs = import_feature_collection(pr, self._fc(crs="urn:ogc:def:crs:EPSG::32643", status="approved"))
+        self.assertTrue(any("cannot be imported" in p for p in probs))
+        self.assertFalse(any(o.status.value == "approved" for o in pr.objects.values()))
+
+    def test_unclosed_ring_area(self):
+        tri_open = {"type": "Polygon", "coordinates": [[[0, 0], [90, 0], [0, 70]]]}
+        tri_closed = {"type": "Polygon", "coordinates": [[[0, 0], [90, 0], [0, 70], [0, 0]]]}
+        self.assertAlmostEqual(polygon_area(tri_open), 3150.0)
+        self.assertAlmostEqual(polygon_area(tri_closed), 3150.0)
+
+    def test_verified_needs_a_name(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as t:
+            f = pathlib.Path(t) / "r.yaml"
+            f.write_text("id: x\nparameters:\n  a: {value: 1, verification: verified}\n")
+            with self.assertRaises(ValueError):
+                RuleSet.load(f)
+            f.write_text("id: x\nparameters:\n  a: {value: 1, verification: verified, verified_by: 'EE (Design), 4.10.2026'}\n")
+            self.assertEqual(RuleSet.load(f).parameters["a"].verified_by, "EE (Design), 4.10.2026")

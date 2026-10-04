@@ -19,7 +19,10 @@ Design (per drain, upstream first) – Rational method, Q = C·i·A / 360
     tc        = max over contributing paths of (catchment inlet time + drain travel times)
     i         = IDF(tc, design return period)
     Q         = ΣCA · i / 360
-Travel time depends on velocity, which depends on Q: iterated to convergence.
+Drains are computed upstream first: each drain's travel time (length ÷ its own
+normal-flow velocity) is added to the time of concentration of the drains below it.
+Where a drain cannot carry its flow, travel time uses the full-section velocity at
+capacity (Q_capacity ÷ A_full) and this is noted.
 """
 
 from __future__ import annotations
@@ -129,12 +132,17 @@ def build_network(pr: Project, rules: RuleContext) -> DrainageNetwork:
         if o.attr("us_invert") is None or o.attr("ds_invert") is None:
             errors.append(f"Drain {o.label}: inverts missing.")
             continue
-        d = Drain(o, us, ds, line_length(o.geometry), sec, str(o.attr("lining", "rcc")).lower(),
+        if o.attr("lining") is None:
+            errors.append(f"Drain {o.label}: lining missing (it sets Manning's n).")
+            continue
+        d = Drain(o, us, ds, line_length(o.geometry), sec, str(o.attr("lining")).lower(),
                   float(o.attr("us_invert")), float(o.attr("ds_invert")))
         if d.slope <= 0:
             errors.append(f"Drain {o.label}: adverse or flat bed slope.")
         drains[o.id] = d
     for nid, n in nodes.items():
+        if n.attr("ground_level") is None:
+            errors.append(f"{n.label}: ground_level missing.")
         out = [d for d in drains.values() if d.us.id == nid]
         if n.kind == ObjectKind.DRAIN_NODE and len(out) != 1:
             errors.append(f"Drain node {n.label}: {len(out)} outgoing drains (needs exactly one).")
@@ -212,6 +220,7 @@ class DrainageDesignResult:
     drains: list[DrainDesign]
     checks: list[CheckResult]
     errors: list[str]
+    notes: list[str] = field(default_factory=list)
 
     @property
     def failing(self) -> list[DrainDesign]:
@@ -248,6 +257,7 @@ def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
         return DrainageDesignResult(METHOD, idf.source, return_period, [], general, list(net.errors))
 
     errors: list[str] = []
+    notes: list[str] = []
     out: list[DrainDesign] = []
     # contributions entering at each node
     at_node: dict[str, list[Catchment]] = {}
@@ -277,15 +287,22 @@ def design_network(net: DrainageNetwork, rules: RuleContext, idf: IDF,
             continue
         q = ca * i / 360.0
         st = normal_flow(d.section, d.slope, n, q)
-        v = st.velocity if st.velocity > 0 else 1.0
-        travel = d.length / v / 60.0
+        if st.capacity_ok:
+            v = st.velocity
+        else:
+            v = st.q_capacity / d.section.full_area()
+            errors_note = f"Drain {d.obj.label}: surcharged – travel time uses the full-section velocity at capacity ({v:.2f} m/s)."
+            notes.append(errors_note)
+        travel = d.length / v / 60.0 if v > 0 else 0.0
         carried[k] = (ca, area, tc + travel)
         dd = DrainDesign(d, ca, area, tc, i, q, n, st, travel)
         dd.checks = _checks(dd, rules)
         if dd.failed:
             dd.alternatives = _alternatives(dd, rules)
         out.append(dd)
-    return DrainageDesignResult(METHOD, idf.source, return_period, out, general, errors)
+    res = DrainageDesignResult(METHOD, idf.source, return_period, out, general, errors)
+    res.notes = notes
+    return res
 
 
 def _checks(dd: DrainDesign, rules: RuleContext) -> list[CheckResult]:

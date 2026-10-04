@@ -258,4 +258,22 @@ def _cover_checks(net: SewerNetwork, rules: RuleContext) -> list[CheckResult]:
                 "invert_continuity", n.id, n.label, CheckStatus.PASS if ok else CheckStatus.FAIL,
                 f"Outgoing invert {o.us_invert:.3f} m vs lowest incoming invert {low_in:.3f} m",
                 o.us_invert, low_in, "m", None))
+            # a sewer must not get smaller downstream
+            d_in = max(p.diameter for p in inc)
+            out.append(CheckResult(
+                "diameter_reduction", n.id, n.label,
+                CheckStatus.PASS if o.diameter >= d_in - 1e-9 else CheckStatus.FAIL,
+                f"Outgoing pipe {o.obj.label} Ø{o.diameter*1000:.0f} mm vs largest incoming Ø{d_in*1000:.0f} mm"
+                + ("" if o.diameter >= d_in - 1e-9 else " – diameter must not reduce downstream"),
+                o.diameter * 1000, d_in * 1000, "mm", None))
+            # where the pipe gets larger, its crown should not be above the incoming crowns (crown matching)
+            crown_in = min(p.ds_invert + p.diameter for p in inc)
+            crown_out = o.us_invert + o.diameter
+            out.append(CheckResult(
+                "crown_matching", n.id, n.label,
+                CheckStatus.PASS if crown_out <= crown_in + 1e-9 else CheckStatus.WARNING,
+                f"Outgoing crown {crown_out:.3f} m vs lowest incoming crown {crown_in:.3f} m"
+                + ("" if crown_out <= crown_in + 1e-9 else " – outgoing crown is higher: incoming pipes will run under "
+                   "backwater; match crowns (drop the outgoing invert)"),
+                crown_out, crown_in, "m", None))
     return out

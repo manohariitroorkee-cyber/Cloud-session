@@ -79,6 +79,9 @@ class RuleSet:
         params: dict[str, Parameter] = {}
         for pid, d in data["parameters"].items():
             src = d.get("source", {})
+            if d.get("verification") == "verified" and not d.get("verified_by"):
+                raise ValueError(f"{p.name}: parameter '{pid}' is marked verified but does not say who verified it "
+                                 f"(add verified_by: name / designation and date)")
             params[pid] = Parameter(
                 id=pid,
                 value=d["value"],

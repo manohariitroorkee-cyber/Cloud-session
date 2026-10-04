@@ -19,6 +19,8 @@ from ..model.core import EngineeringObject, ObjectKind, Project, RelationType
 from .geometry import require_projected
 
 RESERVED = {"kind", "name", "status", "attributes", "from", "to", "id"}
+IMPORT_STATUSES = {"existing", "proposed"}      # checked / approved can only be set by a review record
+GEOGRAPHIC_NAMES = ("CRS84", "EPSG::4326", "EPSG:4326", "OGC:1.3")
 
 
 def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str]:
@@ -27,12 +29,27 @@ def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str
         fc = json.loads(fc)
     problems: list[str] = []
     crs = (fc.get("crs") or {}).get("properties", {}).get("name", "")
-    if "EPSG" in crs:
-        epsg = int(crs.rsplit(":", 1)[-1])
+    # RFC 7946 GeoJSON without a "crs" member is longitude/latitude (WGS84): never accept it as metres
+    if not crs:
+        problems.append("The file declares no coordinate system. Standard GeoJSON is longitude/latitude (WGS84); "
+                        f"reproject to the project CRS EPSG:{pr.crs_epsg} and declare it in a \"crs\" member.")
+        return problems
+    if any(g in crs.upper() for g in GEOGRAPHIC_NAMES):
+        problems.append(f"The file is in geographic coordinates ({crs}); reproject to the project CRS EPSG:{pr.crs_epsg}.")
+        return problems
+    try:
+        epsg = int(crs.replace("::", ":").rsplit(":", 1)[-1])
+    except ValueError:
+        problems.append(f"Unrecognised coordinate system {crs!r}; declare it as urn:ogc:def:crs:EPSG::<code>.")
+        return problems
+    try:
         require_projected(epsg)
-        if epsg != pr.crs_epsg:
-            problems.append(f"File CRS EPSG:{epsg} differs from project EPSG:{pr.crs_epsg}; reproject before import.")
-            return problems
+    except ValueError as e:
+        problems.append(str(e))
+        return problems
+    if epsg != pr.crs_epsg:
+        problems.append(f"File CRS EPSG:{epsg} differs from project EPSG:{pr.crs_epsg}; reproject before import.")
+        return problems
     links: list[tuple[EngineeringObject, str | None, str | None]] = []
     for i, f in enumerate(fc.get("features", [])):
         props = dict(f.get("properties") or {})
@@ -43,8 +60,13 @@ def import_feature_collection(pr: Project, fc: dict[str, Any] | str) -> list[str
             continue
         attrs = dict(props.get("attributes") or {})
         attrs.update({k: v for k, v in props.items() if k not in RESERVED})
+        status = props.get("status", "proposed")
+        if status not in IMPORT_STATUSES:
+            problems.append(f"feature {i} ({props.get('name') or kind.value}): status {status!r} cannot be imported – "
+                            "imported as 'proposed'. Checked/approved status comes only from a review record.")
+            status = "proposed"
         try:
-            obj = EngineeringObject(kind, f["geometry"], attrs, props.get("status", "proposed"),
+            obj = EngineeringObject(kind, f["geometry"], attrs, status,
                                     **({"id": props["id"]} if props.get("id") else {}), name=props.get("name"))
         except (ValueError, KeyError) as e:
             problems.append(f"feature {i}: {e}")

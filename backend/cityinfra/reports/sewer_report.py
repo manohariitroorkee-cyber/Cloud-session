@@ -29,7 +29,7 @@ def render(project_name: str, res: SewerDesignResult, rules: RuleContext, swmm=N
     L += ["", "## 2. Design criteria used", "", "| Parameter | Value | Unit | Source | Status |", "|---|---|---|---|---|"]
     used = sorted({c.parameter.id for c in res.all_checks() if c.parameter} |
                   {"water_supply_lpcd", "sewage_return_factor", "min_sewage_lpcd", "peak_factor",
-                   "infiltration_fraction", "manning_n"})
+                   "infiltration_fraction", "manning_n", "town_population"})
     for pid in used:
         p = rules.get(pid)
         L.append(f"| {pid} | `{p.value}` | {p.unit} | {p.source.cite()} | {p.verification.value} |")
@@ -49,7 +49,8 @@ def render(project_name: str, res: SewerDesignResult, rules: RuleContext, swmm=N
     L += ["", "## 4. Checks not passed", "", "| Object | Check | Status | Detail | Source |", "|---|---|---|---|---|"]
     for c in res.all_checks():
         if c.status != CheckStatus.PASS:
-            src = c.parameter.source.cite() if c.parameter else "hydraulic capacity"
+            src = c.parameter.source.cite() if c.parameter else (
+                "hydraulic capacity (Manning)" if c.check == "capacity" else "network geometry rule")
             L.append(f"| {c.object_label} | {c.check} | {c.status.value} | {c.message} | {src} |")
 
     if res.failing:

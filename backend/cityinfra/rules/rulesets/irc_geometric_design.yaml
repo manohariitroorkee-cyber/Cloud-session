@@ -83,3 +83,17 @@ parameters:
     description: Upward divergence of headlight beam (sag curves)
     source: {document: "IRC:SP:23", clause: "clause not confirmed"}
     verification: requires_verification
+
+  transition_empirical_coeff:
+    value: {plain: 2.7, rolling: 2.7, mountainous: 1.0, steep: 1.0}
+    unit: "-"
+    description: Empirical minimum transition length Ls = c·V²/R (V km/h, R m), by terrain
+    source: {document: "IRC:73 / IRC:38", clause: "clause not confirmed"}
+    verification: requires_verification
+
+  sag_comfort_c_rate:
+    value: 0.6
+    unit: m/s³
+    description: Allowable rate of change of centrifugal acceleration for valley (sag) curve comfort length L = 2√(A·v³/C)
+    source: {document: "IRC:SP:23", clause: "clause not confirmed"}
+    verification: requires_verification

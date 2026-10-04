@@ -129,8 +129,11 @@ def arms_of(pr: Project, j: EngineeringObject) -> list[Arm]:
         if "road" in spec:
             arms.append(_arm_from_road(pr, j, spec, centre))
         else:
+            missing = [k for k in ("name", "bearing_deg", "width_left", "width_right", "speed_kmh") if spec.get(k) is None]
+            if missing:
+                raise ValueError(f"arm {spec.get('name', '?')}: {', '.join(missing)} missing")
             arms.append(Arm(spec["name"], math.radians(float(spec["bearing_deg"])), float(spec["width_left"]),
-                            float(spec["width_right"]), float(spec.get("speed_kmh", 30)), spec.get("priority", "minor")))
+                            float(spec["width_right"]), float(spec["speed_kmh"]), spec.get("priority", "minor")))
     return sorted(arms, key=lambda a: a.bearing % (2 * math.pi))
 
 
@@ -194,8 +197,11 @@ def design_intersection(pr: Project, j: EngineeringObject, rules: RuleContext) -
     if len(arms) < 3:
         d.errors.append(f"Junction {j.label}: an intersection needs at least three arms ({len(arms)} given).")
         return d
-    veh = j.attr("design_vehicle", "bus")
+    veh = j.attr("design_vehicle")
     table = rules.value("corner_radius_by_vehicle")
+    if veh is None:
+        d.errors.append(f"Junction {j.label}: design_vehicle missing (it sets the corner kerb radius).")
+        return d
     if veh not in table:
         d.errors.append(f"Junction {j.label}: no corner radius configured for design vehicle '{veh}'.")
         return d
@@ -229,6 +235,10 @@ def _intersection_checks(pr: Project, d: JunctionDesign, rules: RuleContext) -> 
     # angle of intersection: each minor arm against the major road axis
     amin = rules.get("min_intersection_angle_deg")
     majors = [a for a in d.arms if a.priority == "major"]
+    if not majors:
+        d.checks.append(CheckResult("intersection_angle", j.id, j.label, CheckStatus.NOT_EVALUATED,
+                                    "No arm is marked as the major road – angle of intersection not evaluated. "
+                                    "Set priority: major on the main road's arms.", None, amin.value, "°", amin))
     for a in d.arms:
         if a.priority == "major" or not majors:
             continue
@@ -251,7 +261,7 @@ def _intersection_checks(pr: Project, d: JunctionDesign, rules: RuleContext) -> 
         d.checks.append(CheckResult("corner_radius", j.id, f"{j.label} corner {cn.name}",
                                     CheckStatus.PASS if rmin >= cn.radius_required - 1e-9 else CheckStatus.FAIL,
                                     f"Kerb radius {rmin:.1f} m vs {cn.radius_required:.1f} m for design vehicle "
-                                    f"'{j.attr('design_vehicle', 'bus')}' ({cn.group.kind})",
+                                    f"'{j.attr('design_vehicle')}' ({cn.group.kind})",
                                     rmin, cn.radius_required, "m", par))
         t_avail = ARM_LENGTH_M
         if max(cn.group.t_in, cn.group.t_out) > t_avail:
@@ -369,6 +379,7 @@ def design_roundabout(pr: Project, j: EngineeringObject, rules: RuleContext) -> 
             continue
         fil[a.name] = (en, ex)
     ang = lambda pt: math.atan2(pt[0] - c[0], pt[1] - c[1])        # bearing from centre
+    Rmid = Rci + Wc / 2                    # weaving length is measured along the middle of the circulating carriageway
     weave = []
     for i, a in enumerate(arms):
         b = arms[(i + 1) % len(arms)]
@@ -377,7 +388,7 @@ def design_roundabout(pr: Project, j: EngineeringObject, rules: RuleContext) -> 
         # traffic entering from A circulates clockwise; the next exit is arm B's exit kerb
         start = ang(fil[a.name][0][2]); end = ang(fil[b.name][1][2])
         sweep = (end - start) % (2 * math.pi)
-        length = Ro * sweep
+        length = Rmid * sweep
         weave.append({"section": f"{a.name}→{b.name}", "length_m": length, "width_m": Wc,
                       "entry_width_m": a.w_right, "exit_width_m": b.w_left})
     d.roundabout = {"central_island_radius_m": Rci, "circulatory_width_m": Wc, "inscribed_radius_m": Ro,
@@ -425,6 +436,16 @@ def _roundabout_checks(d: JunctionDesign, rules: RuleContext, p: dict) -> None:
         pr_ = float(f["weaving"]) / float(f["total"])
         Qp = wp.value * ww * (1 + e / ww) * (1 - pr_ / 3) / (1 + ww / l)
         w["capacity_pcu_h"] = Qp
+        vr = rules.get("wardrop_validity")
+        outside = [f"{k} = {val:.2f} outside {lo}–{hi}" for k, val, (lo, hi) in
+                   (("w", ww, vr.value["w_m"]), ("e/w", e / ww, vr.value["e_over_w"]),
+                    ("w/l", ww / l, vr.value["w_over_l"]), ("l", l, vr.value["l_m"])) if not lo <= val <= hi]
+        if outside:
+            w["capacity_note"] = "outside the formula's range of validity: " + "; ".join(outside)
+            d.checks.append(CheckResult("weaving_capacity", j.id, f"{j.label} {w['section']}", CheckStatus.NOT_EVALUATED,
+                                        f"Wardrop capacity {Qp:.0f} PCU/h NOT RELIABLE – geometry " + w["capacity_note"],
+                                        float(f["total"]), Qp, "PCU/h", vr))
+            continue
         d.checks.append(CheckResult("weaving_capacity", j.id, f"{j.label} {w['section']}",
                                     CheckStatus.PASS if float(f["total"]) <= Qp else CheckStatus.FAIL,
                                     f"Design flow {f['total']} PCU/h vs capacity {Qp:.0f} PCU/h "

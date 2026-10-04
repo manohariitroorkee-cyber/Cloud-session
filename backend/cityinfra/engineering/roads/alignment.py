@@ -172,8 +172,10 @@ class Alignment:
 
     @property
     def length(self) -> float:
+        if not self.elements:
+            return 0.0
         e = self.elements[-1]
-        return e.ch0 + e.length if self.elements else 0.0
+        return e.ch0 + e.length
 
     def _find(self, ch: float) -> tuple[Element, float]:
         ch = min(max(ch, 0.0), self.length)

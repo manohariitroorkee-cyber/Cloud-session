@@ -65,7 +65,8 @@ def _y_qmax(sec: Section, slope: float, n: float) -> float:
         return circ.Y_QMAX * sec.depth
     if not sec.closed:
         return sec.depth          # open: Q increases monotonically to the top
-    # closed box: soffit friction makes Q peak just below full; golden-section search
+    # closed box: in this model the soffit becomes wetted only at full depth, so Q(y) rises up
+    # to the soffit and drops there; the search finds that maximum just below full
     lo, hi = 0.5 * sec.depth, sec.depth * (1 - 1e-9)
     g = (math.sqrt(5) - 1) / 2
     for _ in range(80):

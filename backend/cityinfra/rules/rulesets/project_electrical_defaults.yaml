@@ -15,7 +15,7 @@ parameters:
   diversity_factors:
     value: {feeder_pillar: 1.2, pole: 1.2, transformer: 1.3, substation: 1.1}
     unit: "-"
-    description: Diversity factor applied at each level (sum of downstream maximum demands ÷ this factor)
+    description: Diversity factor at each level – the sum of the maximum demands of all loads served from that node is divided by this factor (applied once, not compounded)
     source: {clause: "Design basis"}
     verification: project_decision
 
@@ -52,4 +52,11 @@ parameters:
     unit: kVA
     description: Distribution transformer ratings available for proposals
     source: {clause: "Design basis", note: "Match to the licensee's approved ratings"}
+    verification: project_decision
+
+  lt_nominal_voltage_v:
+    value: 415
+    unit: V
+    description: LT system nominal line voltage used for currents and % voltage drop (transformer no-load voltage is typically 433 V)
+    source: {clause: "Design basis", note: "Confirm the declared supply voltage with the licensee"}
     verification: project_decision

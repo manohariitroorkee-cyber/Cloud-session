@@ -109,6 +109,8 @@ def validate(pr: Project) -> list[str]:
         linked |= {a[0].id, b[0].id}
         if l.kind == ObjectKind.WATER_PIPE and l.attr("diameter_mm") is None:
             errs.append(f"{l.label}: diameter_mm missing.")
+        if l.kind == ObjectKind.WATER_PIPE and l.attr("roughness") is None:
+            errs.append(f"{l.label}: roughness (Hazen-Williams C) missing – take it from the design basis for the pipe material.")
     for n in nodes:
         if n.id not in linked:
             errs.append(f"{n.label}: not connected to any pipe.")
@@ -138,7 +140,7 @@ def build_inp(pr: Project, duration_h: float = 0, hyd_step_min: int = 60) -> tup
     for l in pr.of_kind(ObjectKind.WATER_PIPE):
         a, b = ends(l)
         L.append(f"{lmap.name(l.id, l.name)} {a} {b} {fnum(line_length(l.geometry), 3)} "
-                 f"{fnum(l.attr('diameter_mm'))} {fnum(l.attr('roughness', 130))} {fnum(l.attr('minor_loss', 0))} Open")
+                 f"{fnum(l.attr('diameter_mm'))} {fnum(l.attr('roughness'))} {fnum(l.attr('minor_loss', 0))} Open")
     curves = []
     L += ["", "[PUMPS]", ";ID  Node1  Node2  Parameters"]
     for l in pr.of_kind(ObjectKind.PUMP):
