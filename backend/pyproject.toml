@@ -3,7 +3,7 @@ name = "cityinfra"
 version = "0.1.0"
 description = "City infrastructure engineering platform – engineering model, design rules and engine adapters"
 requires-python = ">=3.11"
-dependencies = ["PyYAML>=6"]
+dependencies = ["PyYAML>=6", "numpy>=1.24", "scipy>=1.10"]
 
 [project.optional-dependencies]
 # stage 2 (API, database, GIS import) – not needed for the stage-1 core and tests
