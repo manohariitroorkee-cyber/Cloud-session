@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Delhi Mobility Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  if (window.tailwind) tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: '#090e17', panel: '#0f1724', panel2: '#152034', line: '#1f2b3f',
+          fog: '#8794aa', text: '#e7ecf4', sodium: '#f5a524', signgreen: '#1d6b47'
+        },
+        fontFamily: {
+          sign: ['"Barlow Condensed"', '"Arial Narrow"', 'sans-serif'],
+          body: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace']
+        }
+      }
+    }
+  };
+</script>
+<style>
+  /* Layout: control + analytics rail on the left, live corridor canvas filling the right. Night-corridor palette lit by sodium-vapour amber. */
+  :root {
+    --ink: #090e17;
+    --panel: #0f1724;
+    --panel2: #152034;
+    --line: #1f2b3f;
+    --text: #e7ecf4;
+    --fog: #8794aa;
+    --sodium: #f5a524;
+    --sign: #1d6b47;
+    --ok: #34c98a;
+    --warn: #f08a24;
+    --crit: #ef4d4d;
+    --sky: #5cc8ff;
+    --f-sign: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--f-body); font-size: 14px; }
+  .app { height: 100%; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .eyebrow { font-family: var(--f-sign); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 600; color: var(--fog); }
+  .h-sign { font-family: var(--f-sign); font-weight: 700; letter-spacing: .02em; text-wrap: balance; }
+  .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .kpi-val { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 24px; line-height: 1.1; font-weight: 500; }
+  .muted { color: var(--fog); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--ink); }
+  .seg button { padding: 6px 10px; font-size: 12px; color: var(--fog); background: transparent; border-right: 1px solid var(--line); white-space: nowrap; }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--panel2); color: var(--text); box-shadow: inset 0 -2px 0 var(--sodium); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn:hover { border-color: #33435e; }
+  .btn-peak { background: var(--sodium); border-color: var(--sodium); color: #1d1404; font-weight: 600; }
+  .btn-peak:hover { background: #ffb740; }
+  .btn-peak.active { background: transparent; color: var(--sodium); }
+  input[type="range"] { accent-color: var(--sodium); width: 100%; }
+  .switch { appearance: none; -webkit-appearance: none; flex: none; width: 38px; height: 22px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .18s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--fog); transition: transform .18s, background .18s; }
+  .switch:checked { background: #8a5a12; }
+  .switch:checked::after { transform: translateX(16px); background: #fff3d6; }
+  :focus-visible { outline: 2px solid var(--sodium); outline-offset: 2px; }
+  .sol { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: var(--ink); transition: border-color .2s; }
+  .sol.on { border-color: #7a5417; background: #151208; }
+  .lvl-ok { --lvl: var(--ok); } .lvl-warn { --lvl: var(--warn); } .lvl-crit { --lvl: var(--crit); } .lvl-info { --lvl: var(--sky); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-family: var(--f-sign); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 13px; color: var(--lvl); border: 1px solid var(--lvl); background: color-mix(in srgb, var(--lvl) 14%, transparent); }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lvl); }
+  .alert-card { border-left: 3px solid var(--lvl); }
+  .rec { display: grid; grid-template-columns: 8px 1fr; gap: 9px; align-items: start; font-size: 13px; line-height: 1.45; }
+  .rec .tick { width: 8px; height: 8px; border-radius: 2px; margin-top: 6px; background: var(--lvl); }
+  .kpi { background: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; min-width: 0; }
+  .kpi .stripe { height: 3px; border-radius: 2px; background: var(--lvl); margin-top: 8px; transition: width .4s; }
+  .delta { font-size: 11px; font-family: var(--f-mono); }
+  .delta.good { color: var(--ok); } .delta.bad { color: var(--crit); }
+  .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; display: flex; }
+  .bar > span { display: block; height: 100%; transition: width .3s; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+  #tooltip { position: absolute; pointer-events: none; background: rgba(9,14,23,.94); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; min-width: 150px; }
+  #toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 12px; transition: opacity .3s; }
+  .canvas-wrap { background: radial-gradient(ellipse at 60% 40%, #0e1626 0%, var(--ink) 70%); }
+  .sidebar { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  @media (max-width: 1023px) { .canvas-wrap { height: 58vh; min-height: 300px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="app flex flex-col lg:flex-row lg:overflow-hidden">
+
+  <!-- ============ LEFT RAIL: analytics + controls ============ -->
+  <aside class="sidebar order-2 lg:order-1 w-full lg:w-[400px] lg:flex-none lg:h-full lg:overflow-y-auto border-t lg:border-t-0 lg:border-r border-line px-4 py-4 flex flex-col gap-4">
+
+    <header class="flex items-center gap-3">
+      <div class="flex-none rounded-md px-2 py-1 border-2 border-white/90 bg-signgreen text-white h-sign text-lg leading-none tracking-wider">DMT</div>
+      <div class="min-w-0">
+        <h1 class="h-sign text-2xl leading-tight">Delhi Mobility Twin</h1>
+        <p class="text-xs muted">Barapullah Ph-III exit → Sarai Kale Khan · eastbound, non-lane mixed traffic</p>
+      </div>
+    </header>
+
+    <!-- Alert + recommendations -->
+    <section id="alertCard" class="panel alert-card lvl-ok p-3 flex flex-col gap-2" aria-live="polite">
+      <div class="flex items-center justify-between gap-2">
+        <span class="eyebrow">Bottleneck alert</span>
+        <span id="alertPill" class="pill"><span class="dot"></span><span id="alertText">Green</span></span>
+      </div>
+      <div id="recs" class="flex flex-col gap-2"></div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-2 gap-2">
+      <div class="kpi lvl-ok" id="kpiDegBox">
+        <div class="eyebrow">Network degradation</div>
+        <div class="flex items-baseline gap-1 mt-1"><span id="kpiDeg" class="kpi-val">0</span><span class="muted text-xs">%</span></div>
+        <div id="dDeg" class="delta muted">&nbsp;</div>
+        <div class="stripe" id="stDeg" style="width:0%"></div>
+      </div>
+      <div class="kpi lvl-ok" id="kpiDelayBox">
+        <div class="eyebrow">Average delay</div>
+        <div class="flex items-baseline gap-1 mt-1"><span id="kpiDelay" class="kpi-val">–</span><span class="muted text-xs">s / veh</span></div>
+        <div id="dDelay" class="delta muted">&nbsp;</div>
+        <div class="stripe" id="stDelay" style="width:0%"></div>
+      </div>
+      <div class="kpi lvl-info" id="kpiThrBox">
+        <div class="eyebrow">Flow throughput</div>
+        <div class="flex items-baseline gap-1 mt-1"><span id="kpiThr" class="kpi-val">0</span><span class="muted text-xs">veh/min</span></div>
+        <div id="dThr" class="delta muted">&nbsp;</div>
+        <div class="stripe" id="stThr" style="width:0%"></div>
+      </div>
+      <div class="kpi lvl-ok" id="kpiOccBox">
+        <div class="eyebrow">SKK occupancy</div>
+        <div class="flex items-baseline gap-1 mt-1"><span id="kpiOcc" class="kpi-val">0</span><span class="muted text-xs">% road area</span></div>
+        <div id="dOcc" class="delta muted">&nbsp;</div>
+        <div class="stripe" id="stOcc" style="width:0%"></div>
+      </div>
+    </section>
+    <div class="grid grid-cols-3 gap-2 text-xs">
+      <div class="kpi"><div class="muted">In network</div><div id="kpiNet" class="num text-base">0</div></div>
+      <div class="kpi"><div class="muted">Conflicts/min</div><div id="kpiConf" class="num text-base">0</div></div>
+      <div class="kpi"><div class="muted">Ramp queue</div><div id="kpiRampQ" class="num text-base">0</div></div>
+    </div>
+
+    <!-- AI geometric solver -->
+    <section class="panel p-3 flex flex-col gap-2">
+      <div class="flex items-center justify-between">
+        <h2 class="h-sign text-lg">Geometric solver</h2>
+        <span class="eyebrow">Applies live</span>
+      </div>
+      <label class="sol" id="solMergeRow">
+        <div class="flex items-start gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm">Extended parallel merger lane</div>
+            <p class="text-xs muted mt-0.5">Re-aligns the ramp nose and adds a ~100 m acceleration lane, turning a ~50° merge into a shallow parallel merge.</p>
+          </div>
+          <input id="solMerge" type="checkbox" class="switch mt-0.5" aria-label="Extended parallel merger lane">
+        </div>
+      </label>
+      <label class="sol" id="solBarrierRow">
+        <div class="flex items-start gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm">Tactical channelizers (bullnoses)</div>
+            <p class="text-xs muted mt-0.5">Solid dividers at the ramp gore and colony mouth hold entering traffic in a channel until it runs parallel.</p>
+            <p id="barrierNote" class="text-xs mt-1" style="color:var(--warn)" hidden></p>
+          </div>
+          <input id="solBarrier" type="checkbox" class="switch mt-0.5" aria-label="Tactical channelizing barriers">
+        </div>
+      </label>
+      <label class="sol" id="solMeterRow">
+        <div class="flex items-start gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm">Virtual ramp metering</div>
+            <p class="text-xs muted mt-0.5">Adaptive signal on the Barapullah ramp. Red time stretches as the merge zone fills, releasing short platoons.</p>
+          </div>
+          <input id="solMeter" type="checkbox" class="switch mt-0.5" aria-label="Virtual ramp metering">
+        </div>
+      </label>
+    </section>
+
+    <!-- Layout modifier -->
+    <section class="panel p-3 flex flex-col gap-3">
+      <h2 class="h-sign text-lg">Layout modifier</h2>
+      <div class="flex flex-col gap-1.5">
+        <span class="eyebrow">Development type</span>
+        <div class="seg w-full" role="group" aria-label="Development type">
+          <button id="presetPooling" class="flex-1" aria-pressed="true">Planned land pooling sector</button>
+          <button id="presetUnauth" class="flex-1" aria-pressed="false">Unauthorised colony road</button>
+        </div>
+        <p id="presetDesc" class="text-xs muted"></p>
+      </div>
+      <div class="flex flex-col gap-1">
+        <div class="flex justify-between items-baseline"><label for="row" class="eyebrow">Right of way</label><span class="num text-sm"><span id="rowVal">45</span> m</span></div>
+        <input id="row" type="range" min="9" max="45" step="1" value="45">
+        <p class="text-xs muted">Eastbound carriageway <span id="cwVal" class="num">15.5</span> m · SKK pinch <span id="bnVal" class="num">9.5</span> m</p>
+      </div>
+      <div class="flex flex-col gap-1">
+        <div class="flex justify-between items-baseline"><label for="demand" class="eyebrow">Base demand</label><span class="num text-sm"><span id="demandVal">100</span>%</span></div>
+        <input id="demand" type="range" min="40" max="160" step="5" value="100">
+        <p id="demandDesc" class="text-xs muted"></p>
+      </div>
+      <div class="flex flex-col gap-2">
+        <span class="eyebrow">Traffic mix (normalised)</span>
+        <div class="bar" id="mixBar"><span style="background:var(--sky)"></span><span style="background:#d6dbe4"></span><span style="background:#35c24f"></span><span style="background:#d9433b"></span></div>
+        <div class="grid grid-cols-[96px_1fr_44px] gap-x-2 gap-y-1 items-center text-xs">
+          <label for="mixTw" class="flex items-center gap-1.5"><span class="swatch" style="background:var(--sky)"></span>Two-wheeler</label><input id="mixTw" type="range" min="0" max="100" value="45"><span id="mixTwVal" class="num text-right">45%</span>
+          <label for="mixCar" class="flex items-center gap-1.5"><span class="swatch" style="background:#d6dbe4"></span>Car</label><input id="mixCar" type="range" min="0" max="100" value="30"><span id="mixCarVal" class="num text-right">30%</span>
+          <label for="mixAuto" class="flex items-center gap-1.5"><span class="swatch" style="background:#35c24f"></span>Auto</label><input id="mixAuto" type="range" min="0" max="100" value="15"><span id="mixAutoVal" class="num text-right">15%</span>
+          <label for="mixHeavy" class="flex items-center gap-1.5"><span class="swatch" style="background:#d9433b"></span>Bus / truck</label><input id="mixHeavy" type="range" min="0" max="100" value="10"><span id="mixHeavyVal" class="num text-right">10%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trends -->
+    <section class="panel p-3 flex flex-col gap-3">
+      <div class="flex items-center justify-between"><h2 class="h-sign text-lg">Trends</h2><span class="eyebrow">Last 3 sim-min</span></div>
+      <div>
+        <div class="flex justify-between text-xs"><span class="muted">Degradation, 0–100 %</span><span id="sparkDegVal" class="num"></span></div>
+        <canvas id="sparkDeg" class="w-full h-14 block mt-1"></canvas>
+      </div>
+      <div>
+        <div class="flex justify-between text-xs"><span class="muted">Throughput, veh/min</span><span id="sparkThrVal" class="num"></span></div>
+        <canvas id="sparkThr" class="w-full h-14 block mt-1"></canvas>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="eyebrow">Waiting to enter</span>
+        <div class="grid grid-cols-[110px_1fr_36px] gap-x-2 gap-y-1.5 items-center text-xs">
+          <span>Ring Road (west)</span><div class="bar"><span id="qMainBar" style="background:var(--sky);width:0%"></span></div><span id="qMain" class="num text-right">0</span>
+          <span>Barapullah ramp</span><div class="bar"><span id="qRampBar" style="background:var(--sodium);width:0%"></span></div><span id="qRamp" class="num text-right">0</span>
+          <span id="qColLabel">Sector road</span><div class="bar"><span id="qColBar" style="background:#b48cff;width:0%"></span></div><span id="qCol" class="num text-right">0</span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="eyebrow">Mean speed by class, km/h</span>
+        <div id="classSpeeds" class="grid grid-cols-[96px_1fr_36px] gap-x-2 gap-y-1.5 items-center text-xs"></div>
+      </div>
+    </section>
+
+    <!-- Baseline -->
+    <section class="panel p-3 flex flex-col gap-2">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="h-sign text-lg">Scenario baseline</h2>
+        <div class="flex gap-2">
+          <button id="btnBaseline" class="btn text-xs">Pin current KPIs</button>
+          <button id="btnClearBaseline" class="btn text-xs" hidden>Clear</button>
+        </div>
+      </div>
+      <p id="baselineText" class="text-xs muted">Pin the KPIs before switching a solution on. Each KPI tile then shows the change against the pinned values.</p>
+    </section>
+
+    <p class="text-[11px] muted leading-relaxed pb-2">Illustrative behavioural model (social-force repulsion with headway-based braking and gap seeking). Geometry and demand are schematic and not calibrated against counts at Sarai Kale Khan; use results to compare options, not to size them.</p>
+  </aside>
+
+  <!-- ============ RIGHT: live simulation ============ -->
+  <main class="order-1 lg:order-2 flex-1 min-w-0 flex flex-col lg:h-full">
+    <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-line">
+      <button id="btnPlay" class="btn" aria-label="Pause simulation"><svg width="12" height="12" viewBox="0 0 12 12" id="playIcon"><rect x="2" y="1.5" width="2.6" height="9" fill="currentColor"/><rect x="7.4" y="1.5" width="2.6" height="9" fill="currentColor"/></svg><span id="playLabel">Pause</span></button>
+      <button id="btnReset" class="btn">Reset</button>
+      <div class="seg" role="group" aria-label="Simulation speed">
+        <button data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="4" aria-pressed="false">4×</button><button data-speed="8" aria-pressed="false">8×</button>
+      </div>
+      <button id="btnPeak" class="btn btn-peak">Trigger Sarai Kale Khan peak hour</button>
+      <div class="flex-1"></div>
+      <div class="seg" role="group" aria-label="Camera">
+        <button data-view="corridor" aria-pressed="true">Corridor</button><button data-view="merge" aria-pressed="false">Merge</button><button data-view="skk" aria-pressed="false">SKK pinch</button>
+      </div>
+      <div class="seg" role="group" aria-label="Vehicle colour">
+        <button data-color="class" aria-pressed="true">Class</button><button data-color="speed" aria-pressed="false">Speed</button>
+      </div>
+      <div class="text-right leading-tight">
+        <div class="eyebrow" style="font-size:10px">Sim clock</div>
+        <div id="clock" class="num text-sm">08:30:00</div>
+      </div>
+    </div>
+
+    <div id="canvasWrap" class="canvas-wrap relative flex-1 min-h-0 overflow-hidden">
+      <canvas id="sim" class="absolute inset-0 w-full h-full block cursor-crosshair"></canvas>
+      <div id="tooltip" hidden></div>
+      <div id="toast" style="opacity:0"></div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-t border-line text-xs">
+      <span class="flex items-center gap-1.5"><span class="swatch" style="background:var(--sky)"></span>Two-wheeler <span id="cTw" class="num muted">0</span></span>
+      <span class="flex items-center gap-1.5"><span class="swatch" style="background:#35c24f;box-shadow:inset 0 -4px 0 #ffd23f"></span>Auto-rickshaw <span id="cAuto" class="num muted">0</span></span>
+      <span class="flex items-center gap-1.5"><span class="swatch" style="background:#d6dbe4"></span>Car <span id="cCar" class="num muted">0</span></span>
+      <span class="flex items-center gap-1.5"><span class="swatch" style="background:#d9433b"></span>Bus <span class="swatch" style="background:#c98a2c"></span>Truck <span id="cHeavy" class="num muted">0</span></span>
+      <span class="flex-1"></span>
+      <span class="muted">Hover a vehicle to inspect · click the road to drop or clear a breakdown · Space pauses</span>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     CONSTANTS & VEHICLE CLASSES
+     World units are metres; y grows downward like the canvas.
+     ========================================================= */
+  const TAU = Math.PI * 2;
+  const MAIN_Y = 100;            // centreline of the eastbound carriageway
+  const X_EXIT = 404;            // vehicles leave the model past this x
+  const H_STEP = 1 / 30;         // fixed physics step (s)
+  const MAXV = 1100;             // hard cap on simulated vehicles
+  const KIND = { main: 1, ramp: 2, aux: 4, colony: 8 };
+  const CELL = 10, GX0 = -40, GY0 = -40, GCOLS = 50, GROWS = 26;
+  const BASE_RATE = { main: 1900, ramp: 1150 };          // veh/h at 100 % demand
+  const COLONY_RATE = { pooling: 1300, unauth: 600 };
+  const VIEWS = {
+    corridor: { x0: 0, x1: 400, y0: -4, y1: 154 },
+    merge: { x0: 118, x1: 292, y0: 22, y1: 140 },
+    skk: { x0: 236, x1: 384, y0: 66, y1: 132 }
+  };
+
+  // thw = time headway (s), s0 = standstill gap (m), latBuf = lateral comfort margin (m)
+  const TYPES = {
+    tw: { key: 'tw', name: 'Two-wheeler', L: 1.9, W: 0.75, v0: [14, 17.5], amax: 3.0, latA: 3.2, tau: 0.7, thw: 0.55, s0: 0.5, latBuf: 0.12,
+      A: 1.8, B: 0.3, seekEvery: 0.3, steps: [-2.4, -1.6, -0.8, 0, 0.8, 1.6, 2.4], latCost: 0.35, noise: 0.6, hyst: 0.3, wander: 0.25, slip: 1.2, turn: 3.6, maxDev: 0.75, mass: 0.25 },
+    auto: { key: 'auto', name: 'Auto-rickshaw', L: 2.8, W: 1.4, v0: [9.5, 12], amax: 1.5, latA: 2.4, tau: 1.0, thw: 0.8, s0: 0.8, latBuf: 0.25,
+      A: 2.2, B: 0.35, seekEvery: 0.5, steps: [-2.2, -1.1, 0, 1.1, 2.2], latCost: 0.5, noise: 2.2, hyst: 0.4, wander: 1.0, slip: 1.5, turn: 3.0, maxDev: 0.6, mass: 0.45 },
+    car: { key: 'car', name: 'Car', L: 4.3, W: 1.8, v0: [13, 16.5], amax: 2.2, latA: 1.6, tau: 1.3, thw: 1.25, s0: 1.8, latBuf: 0.45,
+      A: 2.8, B: 0.45, seekEvery: 1.6, steps: [-3.4, -1.7, 0, 1.7, 3.4], latCost: 0.9, noise: 0.4, hyst: 1.2, wander: 0.06, slip: 2.5, turn: 2.0, maxDev: 0.35, mass: 1 },
+    heavy: { key: 'heavy', name: 'Bus / truck', L: 11, W: 2.55, v0: [10, 12.5], amax: 0.9, latA: 0.8, tau: 2.4, thw: 1.6, s0: 2.6, latBuf: 0.6,
+      A: 3.5, B: 0.55, seekEvery: 4, steps: [-3.2, 0, 3.2], latCost: 1.6, noise: 0.2, hyst: 2.0, wander: 0.02, slip: 4, turn: 1.1, maxDev: 0.16, mass: 4 }
+  };
+  const CAR_COLORS = ['#d6dbe4', '#aab4c4', '#f1f1ec', '#8fa3c2', '#c9b38f', '#9aa0a8', '#e8e2d4'];
+  const SRC_BIAS = {
+    main: { tw: 1, car: 1, auto: 1, heavy: 1 },
+    ramp: { tw: 1, car: 1.15, auto: 0.6, heavy: 0.7 },
+    colony_pooling: { tw: 0.9, car: 1.3, auto: 0.9, heavy: 0.6 },
+    colony_unauth: { tw: 1.35, car: 0.6, auto: 1.6, heavy: 0.15 }
+  };
+
+  /* =========================================================
+     STATE
+     ========================================================= */
+  const S = {
+    running: true, speed: 1, simTime: 0, preset: 'pooling', row: 45, demand: 100,
+    mix: { tw: 45, car: 30, auto: 15, heavy: 10 },
+    sol: { merge: false, barrier: false, meter: false },
+    colorMode: 'class', peakUntil: -1, view: 'corridor'
+  };
+  const G = {
+    segs: [], barriers: [], paths: {}, blocks: [], labels: [], pinch: null,
+    zones: { bn: { x0: 292, x1: 345 }, merge: { x0: 150, x1: 262 } },
+    mainW: 0, bnW: 0, top: 0, bot: 0, meterS: 0, meterIdx: 0, rampMergeS: 0,
+    meterGreen: true, meterT: 0, barrierBlocked: false, accelLane: null
+  };
+  const K = {
+    deg: 0, delay: null, thr: 0, bnOcc: 0, mergeOcc: 0, conf: 0, inNet: 0, rampQ: 0, queued: 0,
+    level: 'ok', cls: { tw: 0, auto: 0, car: 0, heavy: 0 }, clsSp: { tw: 0, auto: 0, car: 0, heavy: 0 },
+    inRate: { main: 0, ramp: 0, colony: 0 }, thrMax: 0, colShare: 0, heavyShare: 0
+  };
+  let V = [];
+  const Q = { main: [], ramp: [], colony: [] };
+  let exitLog = [], delayRing = [], confLog = [], hist = [];
+  let nextId = 1, nextKpiT = 0, nextHistT = 0;
+  let baseline = null;
+
+  const cellHead = new Int32Array(GCOLS * GROWS);
+  const nextIdx = new Int32Array(MAXV + 50);
+  const NB_LON = new Float32Array(96), NB_LAT = new Float32Array(96), NB_W = new Float32Array(96);
+  const CP = { px: 0, py: 0, qx: 0, qy: 0 };
+  const RQ = { c: 0, x: 0, y: 0 };
+  let FX = 0, FY = 0;
+
+  /* =========================================================
+     MATH HELPERS
+     ========================================================= */
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+  function gauss() { let u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const carriageway = row => clamp(0.36 * row, 3.2, 15.5);
+
+  // Closest points between segments p1-q1 and p2-q2 (Ericson). Returns squared distance, fills CP.
+  function segSeg(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y) {
+    const d1x = q1x - p1x, d1y = q1y - p1y, d2x = q2x - p2x, d2y = q2y - p2y, rx = p1x - p2x, ry = p1y - p2y;
+    const a = d1x * d1x + d1y * d1y, e = d2x * d2x + d2y * d2y, f = d2x * rx + d2y * ry;
+    let s, t;
+    if (a <= 1e-9 && e <= 1e-9) { s = 0; t = 0; }
+    else if (a <= 1e-9) { s = 0; t = clamp01(f / e); }
+    else {
+      const c = d1x * rx + d1y * ry;
+      if (e <= 1e-9) { t = 0; s = clamp01(-c / a); }
+      else {
+        const b = d1x * d2x + d1y * d2y, den = a * e - b * b;
+        s = den !== 0 ? clamp01((b * f - c * e) / den) : 0;
+        t = (b * s + f) / e;
+        if (t < 0) { t = 0; s = clamp01(-c / a); } else if (t > 1) { t = 1; s = clamp01((b - c) / a); }
+      }
+    }
+    CP.px = p1x + d1x * s; CP.py = p1y + d1y * s; CP.qx = p2x + d2x * t; CP.qy = p2y + d2y * t;
+    const dx = CP.px - CP.qx, dy = CP.py - CP.qy;
+    return dx * dx + dy * dy;
+  }
+  // Parameter t on a→b where it crosses c→d, or -1.
+  function segInter(ax, ay, bx, by, cx, cy, dx, dy) {
+    const rx = bx - ax, ry = by - ay, sx = dx - cx, sy = dy - cy;
+    const den = rx * sy - ry * sx;
+    if (Math.abs(den) < 1e-9) return -1;
+    const t = ((cx - ax) * sy - (cy - ay) * sx) / den, u = ((cx - ax) * ry - (cy - ay) * rx) / den;
+    return (t >= 0 && t <= 1 && u >= 0 && u <= 1) ? t : -1;
+  }
+
+  /* =========================================================
+     ROAD GEOMETRY
+     The drivable surface is a union of variable-width strips.
+     roadQuery returns clearance to the nearest edge (+ inside).
+     ========================================================= */
+  function addPoly(pts, w, kind) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      G.segs.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], dx, dy, l2: (dx * dx + dy * dy) || 1e-6,
+        w0: Array.isArray(w) ? w[i] : w, w1: Array.isArray(w) ? w[i + 1] : w, kind: KIND[kind] });
+    }
+  }
+  function roadQuery(x, y, mask) {
+    let best = -1e9, bx = 0, by = 0;
+    const segs = G.segs;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (mask && !(s.kind & mask)) continue;
+      let t = ((x - s.ax) * s.dx + (y - s.ay) * s.dy) / s.l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = s.ax + s.dx * t, py = s.ay + s.dy * t;
+      const c = (s.w0 + (s.w1 - s.w0) * t) * 0.5 - Math.hypot(x - px, y - py);
+      if (c > best) { best = c; bx = px; by = py; }
+    }
+    RQ.c = best; RQ.x = bx; RQ.y = by;
+    return RQ;
+  }
+  function lateralLimit(x, y, nx, ny, sign, mask) {
+    if (roadQuery(x, y, mask).c < 0) return 0;
+    let d = 0;
+    const step = 0.25;
+    while (d < 20) {
+      if (roadQuery(x + nx * sign * (d + step), y + ny * sign * (d + step), mask).c < 0) break;
+      d += step;
+    }
+    const ex = x + nx * sign * d, ey = y + ny * sign * d;
+    for (const b of G.barriers) {
+      const t = segInter(x, y, ex, ey, b.ax, b.ay, b.bx, b.by);
+      if (t >= 0) d = Math.min(d, t * d - 0.15);
+    }
+    return Math.max(0, d);
+  }
+  function buildPath(pts, mask) {
+    let xs = [], ys = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0], ay = pts[i][1], bx = pts[i + 1][0], by = pts[i + 1][1];
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+      for (let k = 0; k < n; k++) { xs.push(ax + (bx - ax) * k / n); ys.push(ay + (by - ay) * k / n); }
+    }
+    xs.push(pts[pts.length - 1][0]); ys.push(pts[pts.length - 1][1]);
+    for (let pass = 0; pass < 5; pass++) {           // smooth polyline corners into drivable curves
+      const nx = xs.slice(), ny = ys.slice();
+      for (let i = 3; i < xs.length - 3; i++) {
+        let sx = 0, sy = 0;
+        for (let k = -3; k <= 3; k++) { sx += xs[i + k]; sy += ys[i + k]; }
+        nx[i] = sx / 7; ny[i] = sy / 7;
+      }
+      xs = nx; ys = ny;
+    }
+    const n = xs.length;
+    const P = { n, x: new Float32Array(xs), y: new Float32Array(ys), s: new Float32Array(n), tx: new Float32Array(n), ty: new Float32Array(n),
+      nx: new Float32Array(n), ny: new Float32Array(n), lo: new Float32Array(n), hi: new Float32Array(n), len: 0 };
+    for (let i = 1; i < n; i++) P.s[i] = P.s[i - 1] + Math.hypot(P.x[i] - P.x[i - 1], P.y[i] - P.y[i - 1]);
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+      let tx = P.x[b] - P.x[a], ty = P.y[b] - P.y[a];
+      const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+      P.tx[i] = tx; P.ty[i] = ty; P.nx[i] = -ty; P.ny[i] = tx;
+    }
+    for (let i = 0; i < n; i++) {
+      P.hi[i] = lateralLimit(P.x[i], P.y[i], P.nx[i], P.ny[i], 1, mask);
+      P.lo[i] = -lateralLimit(P.x[i], P.y[i], P.nx[i], P.ny[i], -1, mask);
+    }
+    P.len = P.s[n - 1];
+    return P;
+  }
+  function nearestIdx(P, x, y, from, to) {
+    let bi = from, bd = 1e18;
+    for (let k = from; k <= to; k++) { const dx = x - P.x[k], dy = y - P.y[k], d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = k; } }
+    return bi;
+  }
+
+  function buildGeometry() {
+    const mw = carriageway(S.row);
+    const bw = Math.min(mw, S.preset === 'pooling' ? 9.5 : 5.5);
+    const top = MAIN_Y - mw / 2, bot = MAIN_Y + mw / 2;
+    Object.assign(G, { segs: [], barriers: [], labels: [], mainW: mw, bnW: bw, top, bot, pinch: null, accelLane: null });
+    const canChannel = mw >= 6;
+    const barrierOn = S.sol.barrier && canChannel;
+    G.barrierBlocked = S.sol.barrier && !canChannel;
+
+    // Eastbound Ring Road carriageway with the Sarai Kale Khan pinch
+    addPoly([[-20, MAIN_Y], [262, MAIN_Y]], mw, 'main');
+    addPoly([[262, MAIN_Y], [292, MAIN_Y]], [mw, bw], 'main');
+    addPoly([[292, MAIN_Y], [345, MAIN_Y]], bw, 'main');
+    addPoly([[345, MAIN_Y], [368, MAIN_Y]], [bw, mw], 'main');
+    addPoly([[368, MAIN_Y], [430, MAIN_Y]], mw, 'main');
+    G.zones.bn = { x0: 292, x1: 345 };
+
+    // Barapullah Phase-III exit ramp
+    const RW = 7.5;
+    let rampPts, rampTail;
+    if (S.sol.merge) {
+      rampPts = [[6, -8], [64, 12], [112, 38], [142, top - 5.5], [166, top - 2.1]];
+      addPoly(rampPts, RW, 'ramp');
+      const ay = top - 1.5;
+      addPoly([[160, ay], [252, ay]], 4.2, 'aux');
+      addPoly([[252, ay], [284, top + 0.6]], [4.2, 1.2], 'aux');
+      G.accelLane = { x0: 166, x1: 252, y: ay };
+      G.zones.merge = { x0: 150, x1: 290 };
+      if (barrierOn) G.barriers.push({ ax: 176, ay: top + 0.15, bx: 236, by: top + 0.15 });
+      rampTail = barrierOn
+        ? [[176, ay], [242, ay], [264, top + 0.9], [300, MAIN_Y], [430, MAIN_Y]]
+        : [[176, ay], [248, ay], [280, top + 1.2], [310, MAIN_Y], [430, MAIN_Y]];
+    } else {
+      rampPts = [[6, -8], [78, 14], [128, 42], [160, top - 6.5], [173, top + 1.2]];
+      addPoly(rampPts, RW, 'ramp');
+      G.zones.merge = { x0: 150, x1: 262 };
+      if (barrierOn) {
+        const cw = Math.min(4.2, mw * 0.4);
+        G.barriers.push({ ax: 152, ay: top + cw, bx: 214, by: top + cw });
+        rampTail = [[188, top + cw / 2], [222, top + cw / 2], [248, top + cw / 2 + mw * 0.15], [300, MAIN_Y], [430, MAIN_Y]];
+      } else {
+        rampTail = [[196, top + mw * 0.3], [240, MAIN_Y], [430, MAIN_Y]];
+      }
+    }
+
+    // Colony / sector connector
+    let colPts, colW;
+    if (S.preset === 'pooling') {
+      colPts = [[226, 160], [226, bot + 10], [234, bot + 3], [242, bot - 0.6]];
+      colW = [11, 11, 11, 9];
+    } else {
+      colPts = [[206, 160], [219, 149], [209, 138], [220, 127], [214, bot + 12], [219, bot + 5.5], [229, bot - 0.4]];
+      colW = [4.6, 4.6, 4.4, 4.6, 4.4, 2.6, 4.2];
+      G.pinch = { x: 219, y: bot + 5.5 };
+    }
+    addPoly(colPts, colW, 'colony');
+    const mouthX = colPts[colPts.length - 1][0];
+    let colTail;
+    if (barrierOn) {
+      const cw2 = Math.min(3.6, mw * 0.38);
+      const bx0 = mouthX - (S.preset === 'pooling' ? 16 : 9), bx1 = Math.min(mouthX + 28, 258);
+      G.barriers.push({ ax: bx0, ay: bot - cw2, bx: bx1, by: bot - cw2 });
+      colTail = [[mouthX + 6, bot - cw2 / 2], [bx1 + 6, bot - cw2 / 2], [300, MAIN_Y], [430, MAIN_Y]];
+    } else {
+      colTail = [[mouthX + 14, bot - mw * 0.3], [290, MAIN_Y], [430, MAIN_Y]];
+    }
+
+    // Vehicle paths. Lateral freedom is limited to the strips each stream may use.
+    G.paths.main = buildPath([[-14, MAIN_Y], [430, MAIN_Y]], KIND.main);
+    const rp = buildPath(rampPts.concat(rampTail), KIND.main | KIND.ramp | KIND.aux);
+    G.paths.ramp = rp;
+    G.paths.colony = buildPath(colPts.concat(colTail), KIND.main | KIND.colony);
+    G.meterIdx = nearestIdx(rp, rampPts[2][0], rampPts[2][1], 0, rp.n - 1);
+    G.meterS = rp.s[G.meterIdx];
+    G.rampMergeS = rp.s[nearestIdx(rp, rampPts[rampPts.length - 1][0], rampPts[rampPts.length - 1][1], 0, rp.n - 1)];
+
+    // Labels drawn on the road layer
+    const L = G.labels;
+    L.push({ x: 18, y: 1, a: Math.atan2(20, 72), t: 'BARAPULLAH PH-III EXIT', c: '#c9d2e0' });
+    L.push({ x: 6, y: top - 3, a: 0, t: 'RING ROAD  →  SARAI KALE KHAN', c: '#c9d2e0' });
+    L.push({ x: 292, y: MAIN_Y - Math.max(bw, 6) / 2 - 3.5, a: 0, t: 'SKK PINCH · ' + bw.toFixed(1) + ' m', c: '#f08a24' });
+    L.push(S.preset === 'pooling'
+      ? { x: 248, y: bot + 6.5, a: 0, t: 'LAND POOLING SECTOR · 11 m SECTOR ROAD', c: '#b9a4ef' }
+      : { x: 300, y: 151, a: 0, t: 'UNAUTHORISED COLONY · 4.5 m LANE', c: '#b9a4ef', align: 'right' });
+    if (G.pinch) L.push({ x: G.pinch.x + 5, y: G.pinch.y + 2, a: 0, t: 'ENCROACHMENT 2.6 m', c: '#ef4d4d' });
+    if (G.accelLane) L.push({ x: 200, y: G.accelLane.y - 3.6, a: 0, t: 'ACCELERATION LANE · 86 m', c: '#f5a524' });
+    if (S.sol.meter) L.push({ x: rp.x[G.meterIdx] + 7, y: rp.y[G.meterIdx] + 2, a: 0, t: 'RAMP METER', c: '#f5a524' });
+
+    buildBlocks();
+    reprojectAll();
+    roadDirty = true;
+  }
+
+  function buildBlocks() {
+    const rnd = mulberry32(S.preset === 'pooling' ? 7 : 13);
+    G.blocks = [];
+    const hitsRoad = r => {
+      const pts = [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h], [r.x + r.w / 2, r.y + r.h / 2]];
+      return pts.some(p => roadQuery(p[0], p[1]).c > -1.4);
+    };
+    const hitsBlock = r => G.blocks.some(b => r.x < b.x + b.w + 0.8 && r.x + r.w + 0.8 > b.x && r.y < b.y + b.h + 0.8 && r.y + r.h + 0.8 > b.y);
+    if (S.preset === 'pooling') {
+      for (let x = 150; x < 340; x += 24) for (let y = G.bot + 9; y < 156; y += 15) {
+        const r = { x, y, w: 19, h: 10, c: rnd() < 0.18 ? 'park' : 'plot' };
+        if (!hitsRoad(r)) G.blocks.push(r);
+      }
+    } else {
+      let tries = 0;
+      while (G.blocks.length < 260 && tries < 5000) {
+        tries++;
+        const r = { x: 150 + rnd() * 170, y: G.bot + 4 + rnd() * (154 - G.bot - 4), w: 3 + rnd() * 5, h: 3 + rnd() * 4, c: 'plot' };
+        if (!hitsRoad(r) && !hitsBlock(r)) G.blocks.push(r);
+      }
+    }
+    // North side: Nizamuddin / nursery green belt with a few institutional blocks
+    let tries = 0, made = 0;
+    while (made < 26 && tries < 800) {
+      tries++;
+      const park = rnd() < 0.45;
+      const r = { x: 200 + rnd() * 190, y: 6 + rnd() * Math.max(4, G.top - 18), w: park ? 14 + rnd() * 20 : 6 + rnd() * 10, h: park ? 8 + rnd() * 12 : 5 + rnd() * 7, c: park ? 'park' : 'plot' };
+      if (r.y + r.h > G.top - 5) continue;
+      if (!hitsRoad(r) && !hitsBlock(r)) { G.blocks.push(r); made++; }
+    }
+  }
+
+  function reprojectAll() {
+    for (const p of V) {
+      if (p.stalled) continue;
+      const P = G.paths[p.route];
+      p.path = P;
+      p.idx = nearestIdx(P, p.x, p.y, 0, P.n - 1);
+      p.s = P.s[p.idx];
+    }
+  }
+
+  /* =========================================================
+     DEMAND & SPAWNING
+     ========================================================= */
+  function pickType(src) {
+    const bias = src === 'colony' ? SRC_BIAS['colony_' + S.preset] : SRC_BIAS[src];
+    const w = { tw: S.mix.tw * bias.tw, car: S.mix.car * bias.car, auto: S.mix.auto * bias.auto, heavy: S.mix.heavy * bias.heavy };
+    const tot = w.tw + w.car + w.auto + w.heavy;
+    if (tot <= 0) return 'car';
+    let r = Math.random() * tot;
+    for (const k of ['tw', 'car', 'auto', 'heavy']) { r -= w[k]; if (r <= 0) return k; }
+    return 'car';
+  }
+  function rateOf(src) {
+    const peak = S.simTime < S.peakUntil ? 1.7 : 1;
+    const base = src === 'colony' ? COLONY_RATE[S.preset] : BASE_RATE[src];
+    return base * (S.demand / 100) * peak;
+  }
+  function generateArrivals(h) {
+    for (const src of ['main', 'ramp', 'colony']) {
+      if (Math.random() < rateOf(src) / 3600 * h && Q[src].length < 400) Q[src].push({ t: S.simTime, type: pickType(src) });
+    }
+  }
+  let spawnLeadSpeed = 0;
+  function spawnClear(x, y, tx, ty, L, W) {
+    spawnLeadSpeed = 1e9;
+    const cx = clamp(((x - GX0) / CELL) | 0, 0, GCOLS - 1), cy = clamp(((y - GY0) / CELL) | 0, 0, GROWS - 1);
+    for (let gy = Math.max(0, cy - 1); gy <= Math.min(GROWS - 1, cy + 1); gy++)
+      for (let gx = Math.max(0, cx - 1); gx <= Math.min(GCOLS - 1, cx + 2); gx++)
+        for (let j = cellHead[gy * GCOLS + gx]; j !== -1; j = nextIdx[j]) {
+          const q = V[j];
+          const dx = q.x - x, dy = q.y - y, lon = dx * tx + dy * ty, lat = -dx * ty + dy * tx;
+          if (Math.abs(lat) < (W + q.wid) / 2 + 0.3) {
+            if (Math.abs(lon) < (L + q.len) / 2 + 1.2) return false;
+            if (lon > 0 && lon < 25) spawnLeadSpeed = Math.min(spawnLeadSpeed, Math.hypot(q.vx, q.vy) + 1);
+          }
+        }
+    return true;
+  }
+  function makeVehicle(type, src, x, y, k, tArr, speed, lat) {
+    const T = TYPES[type], P = G.paths[src];
+    let L = T.L, W = T.W, sub = type, color;
+    if (type === 'heavy') {
+      if (Math.random() < 0.55) { sub = 'bus'; L = 11.5; W = 2.6; color = '#d9433b'; }
+      else { sub = 'truck'; L = 8.5 + Math.random() * 2; W = 2.5; color = '#c98a2c'; }
+    } else if (type === 'tw') color = '#5cc8ff';
+    else if (type === 'auto') color = '#35c24f';
+    else color = CAR_COLORS[(Math.random() * CAR_COLORS.length) | 0];
+    const v0 = T.v0[0] + Math.random() * (T.v0[1] - T.v0[0]);
+    return {
+      id: nextId++, type, sub, T, route: src, path: P, x, y, vx: P.tx[k] * speed, vy: P.ty[k] * speed, h: Math.atan2(P.ty[k], P.tx[k]),
+      hx: P.tx[k], hy: P.ty[k], len: L, wid: W, ca: Math.max(0, (L - W) / 2), v0, lat, curLat: lat, idx: k, s: P.s[k],
+      tArr, tSpawn: S.simTime, nextSeek: S.simTime + Math.random() * T.seekEvery, wn: 0, color, stalled: false,
+      ax: 0, ay: 0, brake: false, ff: P.len / v0
+    };
+  }
+  function spawnVehicles() {
+    for (const src of ['main', 'ramp', 'colony']) {
+      const q = Q[src];
+      if (!q.length || V.length >= MAXV) continue;
+      const item = q[0], T = TYPES[item.type], P = G.paths[src];
+      const L = item.type === 'heavy' ? 11.5 : T.L;
+      const k = Math.min(P.n - 1, 3 + Math.ceil(L / 2));
+      const lo = P.lo[k] + T.W / 2 + 0.2, hi = P.hi[k] - T.W / 2 - 0.2;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const lat = lo > hi ? (lo + hi) / 2 : lo + Math.random() * (hi - lo);
+        const x = P.x[k] + P.nx[k] * lat, y = P.y[k] + P.ny[k] * lat;
+        if (spawnClear(x, y, P.tx[k], P.ty[k], L, T.W)) {
+          const v = makeVehicle(item.type, src, x, y, k, item.t, 0, lat);
+          const sp = Math.min(v.v0 * 0.75, spawnLeadSpeed);
+          v.vx = P.tx[k] * sp; v.vy = P.ty[k] * sp;
+          V.push(v); q.shift(); K.inRate[src] += 1;
+          break;
+        }
+      }
+    }
+  }
+
+  /* =========================================================
+     PHYSICS — social-force model with headway braking
+     ========================================================= */
+  function rebuildGrid() {
+    cellHead.fill(-1);
+    for (let i = 0; i < V.length; i++) {
+      const p = V[i];
+      const cx = clamp(((p.x - GX0) / CELL) | 0, 0, GCOLS - 1), cy = clamp(((p.y - GY0) / CELL) | 0, 0, GROWS - 1);
+      const c = cy * GCOLS + cx;
+      nextIdx[i] = cellHead[c]; cellHead[c] = i;
+    }
+  }
+  function updateMeter(h) {
+    if (!S.sol.meter) { G.meterGreen = true; return; }
+    G.meterT -= h;
+    if (G.meterT <= 0) {
+      G.meterGreen = !G.meterGreen;
+      G.meterT = G.meterGreen ? 2.2 : 2.5 + 9 * Math.min(1, K.mergeOcc / 0.45);
+    }
+  }
+  function wallForce(p, x, y, wt) {
+    const q = roadQuery(x, y, 0);
+    const c = q.c - p.wid / 2;
+    if (c < 1.2) {
+      const dx = q.x - x, dy = q.y - y, d = Math.hypot(dx, dy);
+      if (d > 1e-6) { const f = Math.min(30, 7 * Math.exp(-c / 0.35)) * wt; FX += dx / d * f; FY += dy / d * f; }
+    }
+    for (const b of G.barriers) {
+      const bx = b.bx - b.ax, by = b.by - b.ay;
+      const t = clamp01(((x - b.ax) * bx + (y - b.ay) * by) / (bx * bx + by * by));
+      const px = b.ax + bx * t, py = b.ay + by * t;
+      const dx = x - px, dy = y - py, d = Math.hypot(dx, dy);
+      const cb = d - p.wid / 2 - 0.1;
+      if (cb < 1 && d > 1e-6) { const f = Math.min(25, 6 * Math.exp(-cb / 0.3)) * wt; FX += dx / d * f; FY += dy / d * f; }
+    }
+  }
+
+  function accel(p, i, h) {
+    const T = p.T, hx = p.hx, hy = p.hy, P = p.path, t = S.simTime;
+    const sp = Math.hypot(p.vx, p.vy);
+    FX = 0; FY = 0;
+    let vSafe = 1e9, nb = 0;
+
+    // --- neighbour scan: leader braking + social repulsion
+    const cx = clamp(((p.x - GX0) / CELL) | 0, 0, GCOLS - 1), cy = clamp(((p.y - GY0) / CELL) | 0, 0, GROWS - 1);
+    const pax = p.x - hx * p.ca, pay = p.y - hy * p.ca, pbx = p.x + hx * p.ca, pby = p.y + hy * p.ca;
+    for (let gy = Math.max(0, cy - 2); gy <= Math.min(GROWS - 1, cy + 2); gy++) {
+      for (let gx = Math.max(0, cx - 1); gx <= Math.min(GCOLS - 1, cx + 2); gx++) {
+        for (let j = cellHead[gy * GCOLS + gx]; j !== -1; j = nextIdx[j]) {
+          if (j === i) continue;
+          const q = V[j];
+          const dx = q.x - p.x, dy = q.y - p.y;
+          const lon = dx * hx + dy * hy;
+          if (lon < -14 || lon > 36) continue;
+          const lat = -dx * hy + dy * hx;
+          if (lat > 12 || lat < -12) continue;
+          if (lon > 0) {
+            const gap = lon - (p.len + q.len) / 2;
+            if (nb < 96) { NB_LON[nb] = gap; NB_LAT[nb] = lat; NB_W[nb] = q.wid; nb++; }
+            if (Math.abs(lat) < (p.wid + q.wid) / 2 + T.latBuf) {
+              const vs = Math.max(0, (gap - T.s0) / T.thw);
+              if (vs < vSafe) vSafe = vs;
+            }
+          }
+          const reach = (p.len + q.len) / 2 + 2.5;
+          if (dx * dx + dy * dy < reach * reach) {
+            const d2 = segSeg(pax, pay, pbx, pby, q.x - q.hx * q.ca, q.y - q.hy * q.ca, q.x + q.hx * q.ca, q.y + q.hy * q.ca);
+            const cd = Math.sqrt(d2) - (p.wid + q.wid) / 2;
+            if (cd < 2.0) {
+              let nx = CP.px - CP.qx, ny = CP.py - CP.qy, nl = Math.hypot(nx, ny);
+              if (nl < 1e-6) { nx = -dx; ny = -dy; nl = Math.hypot(nx, ny) || 1; }
+              nx /= nl; ny /= nl;
+              const f = T.A * Math.exp(-Math.max(cd, -0.5) / T.B);
+              const front = lon > 0 ? 1 : 0.25;
+              const fl = (nx * hx + ny * hy) * f * front * 0.5;   // longitudinal share is mostly handled by braking
+              const ft = (-nx * hy + ny * hx) * f * front;        // lateral share drives squeezing / swarming
+              FX += hx * fl - hy * ft; FY += hy * fl + hx * ft;
+            }
+          }
+        }
+      }
+    }
+
+    // --- gap seeking: periodically pick the lateral offset with the best expected speed
+    if (t >= p.nextSeek) {
+      p.nextSeek = t + T.seekEvery * (0.6 + 0.8 * Math.random());
+      const k = Math.min(P.n - 1, p.idx + 8);
+      const lo = P.lo[k] + p.wid / 2 + 0.2, hi = P.hi[k] - p.wid / 2 - 0.2;
+      let best = p.lat, bestScore = -1e9, curScore = -1e9;
+      for (const st of T.steps) {
+        const cand = p.curLat + st;
+        if (cand < lo - 0.01 || cand > hi + 0.01) continue;
+        let vs = p.v0;
+        for (let m = 0; m < nb; m++) {
+          if (Math.abs(NB_LAT[m] - st) < (p.wid + NB_W[m]) / 2 + T.latBuf) {
+            const v = Math.max(0, (NB_LON[m] - T.s0) / T.thw);
+            if (v < vs) vs = v;
+          }
+        }
+        const score = vs - Math.abs(st) * T.latCost + (Math.random() - 0.5) * T.noise;
+        if (st === 0) curScore = score;
+        if (score > bestScore) { bestScore = score; best = cand; }
+      }
+      if (bestScore > curScore + T.hyst) p.lat = best;
+    }
+
+    // --- steering target: path point ahead, offset to the chosen lateral position
+    const look = 4 + sp * 0.9 + p.len * 0.3;
+    const k = Math.min(P.n - 1, p.idx + Math.round(look));
+    const lo = P.lo[k] + p.wid / 2 + 0.25, hi = P.hi[k] - p.wid / 2 - 0.25;
+    const lt = lo > hi ? (lo + hi) / 2 : clamp(p.lat, lo, hi);
+    let ex = P.x[k] + P.nx[k] * lt - p.x, ey = P.y[k] + P.ny[k] * lt - p.y;
+    const el = Math.hypot(ex, ey) || 1; ex /= el; ey /= el;
+
+    // --- desired speed: free speed, leader headway, curvature, ramp meter
+    let vd = Math.min(p.v0, vSafe);
+    const curv = P.tx[p.idx] * P.tx[k] + P.ty[p.idx] * P.ty[k];
+    if (curv < 0.97) vd = Math.min(vd, p.v0 * (0.45 + 0.55 * Math.max(0, curv)));
+    if (p.route === 'ramp' && S.sol.meter && !G.meterGreen) {
+      const dist = G.meterS - p.s - p.len / 2;
+      if (dist > -0.3 && dist < 80 && dist > sp * sp / 12 - 1) vd = Math.min(vd, Math.max(0, (dist - 0.6) / 1.0));
+    }
+    const tau = vd < sp - 0.2 ? 0.45 : T.tau;
+    const dax = (ex * vd - p.vx) / tau, day = (ey * vd - p.vy) / tau;
+    const al = clamp(dax * hx + day * hy, -7.5, T.amax), at = clamp(-dax * hy + day * hx, -T.latA, T.latA);
+    FX += hx * al - hy * at; FY += hy * al + hx * at;
+    p.brake = al < -1.8;
+
+    // --- erratic wander (autos most of all)
+    if (T.wander > 0) {
+      p.wn += (-p.wn * 1.5 + gauss() * 3) * h;
+      FX += -hy * p.wn * T.wander; FY += hx * p.wn * T.wander;
+    }
+
+    // --- kerbs and channelizers
+    wallForce(p, p.x, p.y, 1);
+    if (p.len > 4) { wallForce(p, pbx, pby, 0.6); wallForce(p, pax, pay, 0.4); }
+
+    p.ax = FX; p.ay = FY;
+  }
+
+  function integrate(p, h) {
+    if (p.stalled) return;
+    const ox = p.x, oy = p.y, T = p.T;
+    p.vx += p.ax * h; p.vy += p.ay * h;
+    const hx = p.hx, hy = p.hy;
+    let vl = p.vx * hx + p.vy * hy, vt = -p.vx * hy + p.vy * hx;
+    vt *= Math.exp(-T.slip * h);                 // vehicles cannot crab sideways for long
+    if (vl < -0.3) vl = -0.3;                    // no reversing
+    p.vx = hx * vl - hy * vt; p.vy = hy * vl + hx * vt;
+    let sp = Math.hypot(p.vx, p.vy);
+    const cap = p.v0 * 1.15;
+    if (sp > cap) { p.vx *= cap / sp; p.vy *= cap / sp; sp = cap; }
+    p.x += p.vx * h; p.y += p.vy * h;
+    // channelizers are physical: no crossing
+    for (const b of G.barriers) {
+      if (segInter(ox, oy, p.x, p.y, b.ax, b.ay, b.bx, b.by) >= 0) {
+        p.x = ox; p.y = oy;
+        const bx = b.bx - b.ax, by = b.by - b.ay, bl = Math.hypot(bx, by), ux = bx / bl, uy = by / bl;
+        const vp = (p.vx * ux + p.vy * uy) * 0.8;
+        p.vx = ux * vp; p.vy = uy * vp;
+      }
+    }
+    // kerbs are physical too
+    const q = roadQuery(p.x, p.y, 0), minC = p.wid * 0.45;
+    if (q.c < minC) {
+      let dx = q.x - p.x, dy = q.y - p.y; const d = Math.hypot(dx, dy);
+      if (d > 1e-6) {
+        dx /= d; dy /= d;
+        const push = minC - q.c;
+        p.x += dx * push; p.y += dy * push;
+        const vn = p.vx * dx + p.vy * dy;
+        if (vn < 0) { p.vx -= dx * vn; p.vy -= dy * vn; }
+      }
+    }
+    if (sp > 0.6) {
+      // heading follows velocity, but a vehicle never points far off the road direction
+      const P = p.path, pa = Math.atan2(P.ty[p.idx], P.tx[p.idx]);
+      let dev = Math.atan2(p.vy, p.vx) - pa;
+      while (dev > Math.PI) dev -= TAU;
+      while (dev < -Math.PI) dev += TAU;
+      let da = pa + clamp(dev, -T.maxDev, T.maxDev) - p.h;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      const mt = T.turn * h * (0.4 + Math.min(1, sp / 5));
+      p.h += clamp(da, -mt, mt);
+    }
+  }
+
+  function resolveCollisions() {
+    const t = S.simTime;
+    for (let i = 0; i < V.length; i++) {
+      const p = V[i];
+      const cx = clamp(((p.x - GX0) / CELL) | 0, 0, GCOLS - 1), cy = clamp(((p.y - GY0) / CELL) | 0, 0, GROWS - 1);
+      const phx = Math.cos(p.h), phy = Math.sin(p.h);
+      for (let gy = Math.max(0, cy - 1); gy <= Math.min(GROWS - 1, cy + 1); gy++) {
+        for (let gx = Math.max(0, cx - 2); gx <= Math.min(GCOLS - 1, cx + 2); gx++) {
+          for (let j = cellHead[gy * GCOLS + gx]; j !== -1; j = nextIdx[j]) {
+            if (j <= i) continue;
+            const q = V[j];
+            const dx = q.x - p.x, dy = q.y - p.y, r = (p.len + q.len) / 2 + 0.5;
+            if (dx * dx + dy * dy > r * r) continue;
+            if (p.stalled && q.stalled) continue;
+            const qhx = Math.cos(q.h), qhy = Math.sin(q.h);
+            const d2 = segSeg(p.x - phx * p.ca, p.y - phy * p.ca, p.x + phx * p.ca, p.y + phy * p.ca,
+              q.x - qhx * q.ca, q.y - qhy * q.ca, q.x + qhx * q.ca, q.y + qhy * q.ca);
+            const dist = Math.sqrt(d2), cd = dist - (p.wid + q.wid) / 2;
+            if (cd >= 0) continue;
+            let nx, ny;
+            if (dist > 1e-6) { nx = (CP.px - CP.qx) / dist; ny = (CP.py - CP.qy) / dist; }
+            else { const l = Math.hypot(dx, dy) || 1; nx = -dx / l; ny = -dy / l; }
+            const mi = p.T.mass, mj = q.T.mass;
+            const wi = p.stalled ? 0 : q.stalled ? 1 : mj / (mi + mj), wj = q.stalled ? 0 : p.stalled ? 1 : mi / (mi + mj);
+            const ov = -cd;
+            p.x += nx * ov * wi; p.y += ny * ov * wi;
+            q.x -= nx * ov * wj; q.y -= ny * ov * wj;
+            const vn = (p.vx - q.vx) * nx + (p.vy - q.vy) * ny;
+            if (vn < 0) {
+              if (!p.stalled) { p.vx -= nx * vn * wi; p.vy -= ny * vn * wi; }
+              if (!q.stalled) { q.vx += nx * vn * wj; q.vy += ny * vn * wj; }
+              if (vn < -2.5 && !p.stalled && !q.stalled && t - (p.lastConf || -9) > 2 && t - (q.lastConf || -9) > 2) { confLog.push(t); p.lastConf = q.lastConf = t; }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function advanceAndExit() {
+    const t = S.simTime;
+    for (let i = V.length - 1; i >= 0; i--) {
+      const p = V[i];
+      if (p.stalled) continue;
+      const P = p.path;
+      const bi = nearestIdx(P, p.x, p.y, Math.max(0, p.idx - 2), Math.min(P.n - 1, p.idx + 12));
+      p.idx = bi; p.s = P.s[bi];
+      p.curLat = (p.x - P.x[bi]) * P.nx[bi] + (p.y - P.y[bi]) * P.ny[bi];
+      if (p.x > X_EXIT || bi >= P.n - 3) {
+        const delay = Math.max(0, t - p.tArr - p.ff);
+        exitLog.push(t);
+        delayRing.push(delay);
+        if (delayRing.length > 80) delayRing.shift();
+        V[i] = V[V.length - 1]; V.pop();
+      }
+    }
+  }
+
+  function step(h) {
+    S.simTime += h;
+    generateArrivals(h);
+    rebuildGrid();
+    spawnVehicles();
+    rebuildGrid();
+    updateMeter(h);
+    for (const p of V) { p.hx = Math.cos(p.h); p.hy = Math.sin(p.h); }
+    for (let i = 0; i < V.length; i++) { const p = V[i]; if (p.stalled) { p.ax = p.ay = 0; continue; } accel(p, i, h); }
+    for (const p of V) integrate(p, h);
+    rebuildGrid();
+    resolveCollisions();
+    advanceAndExit();
+    if (S.simTime >= nextKpiT) { computeKPIs(); nextKpiT = S.simTime + 0.5; }
+    if (S.simTime >= nextHistT) { hist.push({ deg: K.deg, thr: K.thr }); if (hist.length > 180) hist.shift(); nextHistT = S.simTime + 1; }
+  }
+
+  /* =========================================================
+     ANALYTICS
+     ========================================================= */
+  function computeKPIs() {
+    const t = S.simTime, bn = G.zones.bn, mz = G.zones.merge;
+    let sumV = 0, sumV0 = 0, n = 0, bnA = 0, mgA = 0, rampQ = 0, heavy = 0;
+    const cls = { tw: 0, auto: 0, car: 0, heavy: 0 }, clsSp = { tw: 0, auto: 0, car: 0, heavy: 0 };
+    for (const p of V) {
+      if (p.stalled) continue;
+      const sp = Math.hypot(p.vx, p.vy);
+      sumV += sp; sumV0 += p.v0; n++;
+      cls[p.type]++; clsSp[p.type] += sp;
+      if (p.type === 'heavy') heavy++;
+      if (p.x >= bn.x0 && p.x <= bn.x1 && Math.abs(p.y - MAIN_Y) < G.mainW) bnA += p.len * p.wid;
+      if (p.x >= mz.x0 && p.x <= mz.x1 && p.y > G.top - 5 && p.y < G.bot + 1) mgA += p.len * p.wid;
+      if (p.route === 'ramp' && p.s < G.rampMergeS && sp < 2.5) rampQ++;
+    }
+    K.inNet = n; K.cls = cls; K.clsSp = clsSp; K.rampQ = rampQ;
+    K.heavyShare = n ? heavy / n : 0;
+    K.bnOcc = bnA / (G.bnW * (bn.x1 - bn.x0));
+    K.mergeOcc = mgA / ((G.mainW + (G.accelLane ? 4 : 0)) * (mz.x1 - mz.x0));
+    K.queued = Q.main.length + Q.ramp.length + Q.colony.length;
+    const speedLoss = n && sumV0 ? clamp01(1 - sumV / sumV0) : 0;
+    K.deg = clamp(100 * (0.72 * speedLoss + 0.28 * Math.min(1, (K.queued + rampQ * 0.5) / 60)), 0, 100);
+    while (exitLog.length && exitLog[0] < t - 60) exitLog.shift();
+    while (confLog.length && confLog[0] < t - 60) confLog.shift();
+    const win = Math.max(5, Math.min(60, t));
+    K.thr = exitLog.length * 60 / win;
+    K.conf = confLog.length * 60 / win;
+    K.delay = delayRing.length ? delayRing.reduce((a, b) => a + b, 0) / delayRing.length : null;
+    if (t > 60) K.thrMax = Math.max(K.thrMax, K.thr);
+    const decay = Math.exp(-0.5 / 60);
+    let inSum = 0;
+    for (const s of ['main', 'ramp', 'colony']) { K.inRate[s] *= decay; inSum += K.inRate[s]; }
+    K.colShare = inSum ? K.inRate.colony / inSum : 0;
+    K.level = (K.bnOcc > 0.38 || K.deg > 60) ? 'crit' : (K.bnOcc > 0.22 || K.deg > 35) ? 'warn' : 'ok';
+  }
+
+  function buildRecs() {
+    const r = [];
+    const red = K.level === 'crit', notGreen = K.level !== 'ok';
+    if (G.barrierBlocked) r.push(['warn', `Channelizers need at least 6 m of carriageway; this RoW gives ${G.mainW.toFixed(1)} m, so none were placed.`]);
+    if (notGreen && K.colShare > 0.22 && K.thrMax > 0 && K.thr < K.thrMax * 0.85 && K.bnOcc > 0.3)
+      r.push(['crit', `Warning: Braess's Paradox triggered. The ${S.preset === 'pooling' ? 'sector' : 'colony'} link supplies ${Math.round(K.colShare * 100)}% of entries but feeds the same SKK pinch, and corridor throughput has fallen ${Math.round((1 - K.thr / K.thrMax) * 100)}% below its best. ${S.sol.merge ? 'Pair the merger lane with ramp metering.' : 'Extended lane highly recommended.'}`]);
+    if (red && !S.sol.merge && (K.mergeOcc > 0.3 || K.rampQ > 8))
+      r.push(['crit', `Merge friction at the Barapullah nose is the main loss (merge occupancy ${Math.round(K.mergeOcc * 100)}%). Apply the extended parallel merger lane.`]);
+    if (S.sol.meter && K.rampQ > 25)
+      r.push(['warn', `The ramp meter is holding ${K.rampQ} vehicles on the Barapullah viaduct. Spillback toward Phase-III is likely; shorten red time or pair metering with the merger lane.`]);
+    if (!S.sol.meter && red && K.mergeOcc > 0.38)
+      r.push(['warn', 'The merge zone is saturated. Virtual ramp metering would release ramp traffic in short platoons and protect the SKK pinch.']);
+    if (!S.sol.barrier && K.conf > 12 && G.mainW >= 6)
+      r.push(['warn', `${Math.round(K.conf)} hard conflicts a minute at the gore areas. Bullnose channelizers will force entering traffic to align before merging.`]);
+    if (notGreen && K.heavyShare > 0.15)
+      r.push(['info', `Buses and trucks are ${Math.round(K.heavyShare * 100)}% of vehicles and act as moving blocks. Consider a peak-hour truck window or a bus bay clear of the pinch.`]);
+    if (S.preset === 'pooling' && S.row < 24)
+      r.push(['warn', `A ${S.row} m RoW cannot carry a planned sector's demand. Master Plan sector roads assume far wider corridors.`]);
+    if (S.preset === 'unauth' && Q.colony.length > 15)
+      r.push(['warn', `${Q.colony.length} vehicles are stuck behind the 2.6 m encroachment at the colony mouth. Clearing it is cheaper than any corridor fix.`]);
+    if (V.some(p => p.stalled)) r.push(['info', 'A breakdown is blocking part of the carriageway. Click it again to clear it.']);
+    if (!r.length) r.push(notGreen
+      ? ['info', 'Density is rising at the SKK pinch. Keep watching the occupancy tile, or pin a baseline and test a solution.']
+      : ['ok', 'Flow is stable. Trigger the peak hour to stress-test the layout.']);
+    return r.slice(0, 4);
+  }
+
+  /* =========================================================
+     RENDERING
+     ========================================================= */
+  const canvas = document.getElementById('sim');
+  const ctx = canvas.getContext('2d');
+  const roadCanvas = document.createElement('canvas');
+  const rctx = roadCanvas.getContext('2d');
+  let DPR = 1, CW = 0, CH = 0, roadDirty = true;
+  const VW = { sc: 1, ox: 0, oy: 0, cur: { ...VIEWS.corridor }, target: { ...VIEWS.corridor } };
+  const SPEED_COLORS = Array.from({ length: 21 }, (_, i) => `hsl(${Math.round(i * 7)},78%,56%)`);
+  const sx = x => VW.ox + x * VW.sc, sy = y => VW.oy + y * VW.sc;
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    CW = Math.max(50, r.width); CH = Math.max(50, r.height);
+    canvas.width = roadCanvas.width = Math.round(CW * DPR);
+    canvas.height = roadCanvas.height = Math.round(CH * DPR);
+    fitView();
+    roadDirty = true;
+  }
+  function fitView() {
+    const v = VW.cur, w = v.x1 - v.x0, hh = v.y1 - v.y0;
+    VW.sc = Math.min(CW / w, CH / hh);
+    VW.ox = CW / 2 - (v.x0 + w / 2) * VW.sc;
+    VW.oy = CH / 2 - (v.y0 + hh / 2) * VW.sc;
+  }
+  function updateView(dt) {
+    const c = VW.cur, t = VW.target;
+    let moving = false;
+    for (const k of ['x0', 'x1', 'y0', 'y1']) {
+      const d = t[k] - c[k];
+      if (Math.abs(d) > 0.05) { c[k] += d * Math.min(1, dt * 6); moving = true; } else c[k] = t[k];
+    }
+    if (moving) { fitView(); roadDirty = true; }
+  }
+
+  function segShape(c, s, extra) {
+    const len = Math.sqrt(s.l2), ux = s.dx / len, uy = s.dy / len, nx = -uy, ny = ux;
+    const r0 = s.w0 / 2 + extra, r1 = s.w1 / 2 + extra;
+    c.beginPath();
+    c.moveTo(sx(s.ax + nx * r0), sy(s.ay + ny * r0));
+    c.lineTo(sx(s.bx + nx * r1), sy(s.by + ny * r1));
+    c.lineTo(sx(s.bx - nx * r1), sy(s.by - ny * r1));
+    c.lineTo(sx(s.ax - nx * r0), sy(s.ay - ny * r0));
+    c.closePath(); c.fill();
+    c.beginPath(); c.arc(sx(s.ax), sy(s.ay), Math.max(0.1, r0 * VW.sc), 0, TAU); c.fill();
+    c.beginPath(); c.arc(sx(s.bx), sy(s.by), Math.max(0.1, r1 * VW.sc), 0, TAU); c.fill();
+  }
+
+  function drawRoadLayer() {
+    const c = rctx, sc = VW.sc;
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    c.fillStyle = '#0a0f19'; c.fillRect(0, 0, CW, CH);
+    // urban fabric
+    for (const b of G.blocks) {
+      c.fillStyle = b.c === 'park' ? '#0f2119' : (S.preset === 'unauth' && b.y > G.bot ? '#191a22' : '#131b29');
+      c.fillRect(sx(b.x), sy(b.y), b.w * sc, b.h * sc);
+      if (b.c !== 'park') { c.strokeStyle = '#1c2638'; c.lineWidth = 1; c.strokeRect(sx(b.x) + 0.5, sy(b.y) + 0.5, b.w * sc - 1, b.h * sc - 1); }
+    }
+    // flyover shadow, kerbs, asphalt
+    c.fillStyle = 'rgba(0,0,0,0.45)';
+    c.save(); c.translate(1.4 * sc, 1.8 * sc);
+    for (const s of G.segs) if (s.kind === KIND.ramp) segShape(c, s, 0.4);
+    c.restore();
+    c.fillStyle = '#3a465b';
+    for (const s of G.segs) segShape(c, s, 0.55);
+    for (const s of G.segs) {
+      c.fillStyle = s.kind === KIND.ramp ? '#222b3b' : s.kind === KIND.aux ? '#262a33' : s.kind === KIND.colony ? (S.preset === 'unauth' ? '#2a2620' : '#1e2534') : '#1c2331';
+      segShape(c, s, 0);
+    }
+    // SKK pinch hatch
+    const bn = G.zones.bn;
+    c.save();
+    c.beginPath(); c.rect(sx(bn.x0), sy(MAIN_Y - G.bnW / 2), (bn.x1 - bn.x0) * sc, G.bnW * sc); c.clip();
+    c.strokeStyle = 'rgba(239,77,77,0.14)'; c.lineWidth = 1;
+    for (let x = bn.x0 - 20; x < bn.x1 + 20; x += 2.5) { c.beginPath(); c.moveTo(sx(x), sy(MAIN_Y + 10)); c.lineTo(sx(x + 20), sy(MAIN_Y - 10)); c.stroke(); }
+    c.restore();
+    // edge lines (faint, Delhi-style: nobody keeps lanes)
+    c.strokeStyle = 'rgba(230,236,244,0.18)'; c.lineWidth = Math.max(1, 0.15 * sc); c.setLineDash([3 * sc, 4 * sc]);
+    c.beginPath(); c.moveTo(sx(0), sy(MAIN_Y)); c.lineTo(sx(255), sy(MAIN_Y)); c.stroke();
+    c.setLineDash([]);
+    // flow chevrons
+    c.strokeStyle = 'rgba(230,236,244,0.22)'; c.lineWidth = Math.max(1, 0.3 * sc);
+    for (const x of [24, 96, 380]) {
+      c.beginPath(); c.moveTo(sx(x), sy(MAIN_Y - 1.4)); c.lineTo(sx(x + 2.4), sy(MAIN_Y)); c.lineTo(sx(x), sy(MAIN_Y + 1.4)); c.stroke();
+    }
+    // channelizers with bullnose gore
+    for (const b of G.barriers) {
+      const bx = b.bx - b.ax, by = b.by - b.ay, bl = Math.hypot(bx, by), ux = bx / bl, uy = by / bl, nx = -uy, ny = ux;
+      c.fillStyle = 'rgba(243,198,64,0.28)'; c.strokeStyle = '#f3c640'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(sx(b.ax), sy(b.ay)); c.lineTo(sx(b.ax + ux * 9 + nx * 0.7), sy(b.ay + uy * 9 + ny * 0.7)); c.lineTo(sx(b.ax + ux * 9 - nx * 0.7), sy(b.ay + uy * 9 - ny * 0.7)); c.closePath(); c.fill(); c.stroke();
+      c.lineCap = 'round';
+      c.strokeStyle = '#0b0f16'; c.lineWidth = Math.max(2, 0.75 * sc);
+      c.beginPath(); c.moveTo(sx(b.ax), sy(b.ay)); c.lineTo(sx(b.bx), sy(b.by)); c.stroke();
+      c.strokeStyle = '#f3c640'; c.lineWidth = Math.max(1.5, 0.5 * sc); c.setLineDash([Math.max(2, 1.2 * sc), Math.max(2, 1.2 * sc)]);
+      c.beginPath(); c.moveTo(sx(b.ax), sy(b.ay)); c.lineTo(sx(b.bx), sy(b.by)); c.stroke();
+      c.setLineDash([]); c.lineCap = 'butt';
+      c.fillStyle = '#f6f1e2'; c.beginPath(); c.arc(sx(b.ax), sy(b.ay), Math.max(2, 0.6 * sc), 0, TAU); c.fill();
+    }
+    // ramp meter stop line
+    if (S.sol.meter) {
+      const P = G.paths.ramp, k = G.meterIdx;
+      c.strokeStyle = '#f6f1e2'; c.lineWidth = Math.max(1.5, 0.4 * sc);
+      c.beginPath(); c.moveTo(sx(P.x[k] + P.nx[k] * P.lo[k]), sy(P.y[k] + P.ny[k] * P.lo[k])); c.lineTo(sx(P.x[k] + P.nx[k] * P.hi[k]), sy(P.y[k] + P.ny[k] * P.hi[k])); c.stroke();
+    }
+    // labels
+    const fs = clamp(3.1 * sc, 10, 15);
+    c.font = `600 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    c.textBaseline = 'alphabetic';
+    for (const l of G.labels) {
+      c.save(); c.translate(sx(l.x), sy(l.y)); c.rotate(l.a);
+      c.textAlign = l.align || 'left';
+      if ('letterSpacing' in c) c.letterSpacing = '1.5px';
+      c.fillStyle = l.c; c.globalAlpha = 0.85; c.fillText(l.t, 0, 0);
+      c.restore();
+    }
+    if ('letterSpacing' in c) c.letterSpacing = '0px';
+    // scale bar
+    const px50 = 50 * sc, x0 = 14, y0 = CH - 16;
+    c.strokeStyle = '#8794aa'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(x0, y0 - 4); c.lineTo(x0, y0); c.lineTo(x0 + px50, y0); c.lineTo(x0 + px50, y0 - 4); c.stroke();
+    c.fillStyle = '#8794aa'; c.font = '500 11px "IBM Plex Mono", monospace'; c.textAlign = 'left';
+    c.fillText('50 m', x0 + px50 + 6, y0 + 1);
+  }
+
+  function drawVehicle(c, p, now) {
+    const cs = Math.cos(p.h), sn = Math.sin(p.h), k = DPR * VW.sc;
+    c.setTransform(k * cs, k * sn, -k * sn, k * cs, DPR * sx(p.x), DPR * sy(p.y));
+    const L = p.len, W = p.wid, hl = L / 2, hw = W / 2;
+    if (p.stalled) {
+      c.fillStyle = '#6b6f78'; c.fillRect(-hl, -hw, L, W);
+      c.fillStyle = '#4a4e57'; c.fillRect(hl - 2, -hw, 2, W);
+      if ((now / 400 | 0) % 2) { c.fillStyle = '#ffae00'; c.fillRect(-hl, -hw, 0.6, 0.6); c.fillRect(-hl, hw - 0.6, 0.6, 0.6); c.fillRect(hl - 0.6, -hw, 0.6, 0.6); c.fillRect(hl - 0.6, hw - 0.6, 0.6, 0.6); }
+      return;
+    }
+    const bySpeed = S.colorMode === 'speed';
+    c.fillStyle = bySpeed ? SPEED_COLORS[Math.round(clamp01(Math.hypot(p.vx, p.vy) / p.v0) * 20)] : p.color;
+    c.fillRect(-hl, -hw, L, W);
+    if (!bySpeed) {
+      if (p.type === 'auto') { c.fillStyle = '#ffd23f'; c.fillRect(-hl + 0.25, -hw + 0.18, L * 0.62, W - 0.36); }
+      else if (p.type === 'car') { c.fillStyle = '#0d1420'; c.fillRect(hl - 1.55, -hw + 0.2, 0.55, W - 0.4); c.fillRect(-hl + 0.45, -hw + 0.25, 0.4, W - 0.5); }
+      else if (p.sub === 'bus') { c.fillStyle = '#f2d9d4'; c.fillRect(-hl + 0.6, -0.25, L - 1.2, 0.5); c.fillStyle = '#0d1420'; c.fillRect(hl - 0.5, -hw + 0.2, 0.35, W - 0.4); }
+      else if (p.sub === 'truck') { c.fillStyle = '#8a5a17'; c.fillRect(hl - 2.1, -hw, 2.1, W); c.fillStyle = '#0d1420'; c.fillRect(hl - 0.5, -hw + 0.25, 0.3, W - 0.5); }
+      else if (p.type === 'tw') { c.fillStyle = '#0d1420'; c.fillRect(-0.25, -0.22, 0.6, 0.44); }
+    }
+    if (p.brake) { c.fillStyle = '#ff4a3d'; c.fillRect(-hl, -hw, 0.3, W); }
+  }
+
+  let hovered = null, mouse = null;
+  function render(now) {
+    if (roadDirty) { drawRoadLayer(); roadDirty = false; }
+    const c = ctx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(roadCanvas, 0, 0);
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // live pinch tint by alert level
+    const bn = G.zones.bn, col = K.level === 'crit' ? '239,77,77' : K.level === 'warn' ? '240,138,36' : '52,201,138';
+    const pulse = K.level === 'crit' ? 0.14 + 0.08 * Math.sin(now / 260) : 0.09;
+    c.fillStyle = `rgba(${col},${pulse})`;
+    c.fillRect(sx(bn.x0), sy(MAIN_Y - G.bnW / 2), (bn.x1 - bn.x0) * VW.sc, G.bnW * VW.sc);
+    // ramp meter head
+    if (S.sol.meter) {
+      const P = G.paths.ramp, k = G.meterIdx;
+      const hxp = P.x[k] + P.nx[k] * (P.hi[k] + 2.2), hyp = P.y[k] + P.ny[k] * (P.hi[k] + 2.2);
+      const r = Math.max(3.5, 1.3 * VW.sc);
+      c.fillStyle = '#05080e'; c.beginPath(); c.arc(sx(hxp), sy(hyp), r + 2, 0, TAU); c.fill();
+      c.fillStyle = G.meterGreen ? '#34c98a' : '#ef4d4d';
+      c.shadowColor = c.fillStyle; c.shadowBlur = 10;
+      c.beginPath(); c.arc(sx(hxp), sy(hyp), r, 0, TAU); c.fill();
+      c.shadowBlur = 0;
+    }
+    for (const p of V) drawVehicle(c, p, now);
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // hover inspection
+    hovered = null;
+    if (mouse) {
+      let bd = 1e9;
+      for (const p of V) {
+        const d = Math.hypot(p.x - mouse.wx, p.y - mouse.wy);
+        if (d < Math.max(2.2, p.len / 2 + 0.5) && d < bd) { bd = d; hovered = p; }
+      }
+    }
+    const tip = document.getElementById('tooltip');
+    if (hovered) {
+      const p = hovered;
+      c.strokeStyle = '#f5a524'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(sx(p.x), sy(p.y), Math.max(8, (p.len / 2 + 1.5) * VW.sc), 0, TAU); c.stroke();
+      const label = p.stalled ? 'Breakdown (stalled truck)' : p.sub === 'bus' ? 'DTC bus' : p.sub === 'truck' ? 'Goods truck' : p.T.name;
+      const route = p.stalled ? 'Blocking carriageway' : p.route === 'main' ? 'Ring Road through traffic' : p.route === 'ramp' ? 'Barapullah Ph-III ramp' : (S.preset === 'pooling' ? 'Land pooling sector' : 'Unauthorised colony');
+      const spd = Math.hypot(p.vx, p.vy) * 3.6;
+      const elapsed = p.stalled ? 0 : S.simTime - p.tArr;
+      tip.innerHTML = `<div class="font-semibold">${label}</div><div class="muted">${route}</div>` +
+        (p.stalled ? '<div class="muted">Click to clear</div>' :
+          `<div class="num">${spd.toFixed(0)} km/h <span class="muted">of ${(p.v0 * 3.6).toFixed(0)} desired</span></div><div class="num">${elapsed.toFixed(0)} s since arrival</div>`);
+      tip.hidden = false;
+      const tx = Math.min(CW - 170, mouse.px + 14), ty = Math.min(CH - 90, mouse.py + 14);
+      tip.style.left = tx + 'px'; tip.style.top = ty + 'px';
+    } else tip.hidden = true;
+  }
+
+  function drawSpark(cv, arr, key, maxFixed, color) {
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return 0;
+    if (cv.width !== Math.round(w * DPR) || cv.height !== Math.round(h * DPR)) { cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); }
+    const c = cv.getContext('2d');
+    c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, w, h);
+    let max = maxFixed;
+    if (!max) { max = 10; for (const d of arr) max = Math.max(max, d[key]); max = Math.ceil(max * 1.15 / 10) * 10; }
+    c.strokeStyle = 'rgba(135,148,170,0.16)'; c.lineWidth = 1;
+    for (const f of [0, 0.5, 1]) { const y = Math.round(3 + (h - 6) * f) + 0.5; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    if (arr.length < 2) return max;
+    const N = 180, dx = (w - 6) / (N - 1), x0 = (w - 6) - (arr.length - 1) * dx;
+    const Y = v => 3 + (h - 6) * (1 - clamp01(v / max));
+    c.beginPath();
+    arr.forEach((d, i) => { const x = x0 + i * dx, y = Y(d[key]); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    const lastX = x0 + (arr.length - 1) * dx, lastY = Y(arr[arr.length - 1][key]);
+    c.strokeStyle = color; c.lineWidth = 1.6; c.stroke();
+    c.lineTo(lastX, h); c.lineTo(x0, h); c.closePath();
+    const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, color + '55'); g.addColorStop(1, color + '00');
+    c.fillStyle = g; c.fill();
+    c.fillStyle = color; c.beginPath(); c.arc(lastX, lastY, 3, 0, TAU); c.fill();
+    return max;
+  }
+
+  /* =========================================================
+     UI
+     ========================================================= */
+  const $ = id => document.getElementById(id);
+  let lastRecsHTML = '', lastUi = 0, lastSpark = 0;
+
+  function setLevel(el, lvl) { el.classList.remove('lvl-ok', 'lvl-warn', 'lvl-crit', 'lvl-info'); el.classList.add('lvl-' + lvl); }
+  function fmtClock(t) {
+    const s = 8 * 3600 + 30 * 60 + Math.floor(t);
+    const hh = Math.floor(s / 3600) % 24, mm = Math.floor(s / 60) % 60, ss = s % 60;
+    return [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
+  }
+  function deltaText(el, cur, base, betterLow, unit, digits) {
+    if (!baseline || base == null || cur == null) { el.innerHTML = '&nbsp;'; el.className = 'delta muted'; return; }
+    const d = cur - base;
+    const good = betterLow ? d < 0 : d > 0;
+    const tiny = Math.abs(d) < Math.pow(10, -digits) * 5;
+    el.className = 'delta ' + (tiny ? 'muted' : good ? 'good' : 'bad');
+    el.textContent = `${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(digits)}${unit} vs baseline`;
+  }
+
+  function uiTick(now) {
+    if (now - lastUi < 250) return;
+    lastUi = now;
+    const lvlName = { ok: 'Green', warn: 'Orange', crit: 'Critical red' };
+    setLevel($('alertCard'), K.level); setLevel($('alertPill'), K.level);
+    $('alertText').textContent = lvlName[K.level];
+    const recHTML = buildRecs().map(([lv, t]) => `<div class="rec lvl-${lv}"><span class="tick"></span><span>${t}</span></div>`).join('');
+    if (recHTML !== lastRecsHTML) { $('recs').innerHTML = recHTML; lastRecsHTML = recHTML; }
+
+    $('kpiDeg').textContent = K.deg.toFixed(0);
+    setLevel($('kpiDegBox'), K.deg > 60 ? 'crit' : K.deg > 35 ? 'warn' : 'ok');
+    $('stDeg').style.width = K.deg.toFixed(0) + '%';
+    $('kpiDelay').textContent = K.delay == null ? '–' : K.delay.toFixed(1);
+    setLevel($('kpiDelayBox'), K.delay == null ? 'ok' : K.delay > 45 ? 'crit' : K.delay > 15 ? 'warn' : 'ok');
+    $('stDelay').style.width = (K.delay == null ? 0 : clamp(K.delay / 90 * 100, 0, 100)).toFixed(0) + '%';
+    $('kpiThr').textContent = K.thr.toFixed(0);
+    $('stThr').style.width = clamp(K.thr / 140 * 100, 0, 100).toFixed(0) + '%';
+    $('kpiOcc').textContent = (K.bnOcc * 100).toFixed(0);
+    setLevel($('kpiOccBox'), K.bnOcc > 0.38 ? 'crit' : K.bnOcc > 0.22 ? 'warn' : 'ok');
+    $('stOcc').style.width = clamp(K.bnOcc / 0.6 * 100, 0, 100).toFixed(0) + '%';
+    if (baseline) {
+      deltaText($('dDeg'), K.deg, baseline.deg, true, ' pts', 0);
+      deltaText($('dDelay'), K.delay, baseline.delay, true, ' s', 1);
+      deltaText($('dThr'), K.thr, baseline.thr, false, '', 0);
+      deltaText($('dOcc'), K.bnOcc * 100, baseline.occ * 100, true, ' pts', 0);
+    } else for (const id of ['dDeg', 'dDelay', 'dThr', 'dOcc']) deltaText($(id), null, null);
+    $('kpiNet').textContent = K.inNet;
+    $('kpiConf').textContent = K.conf.toFixed(0);
+    $('kpiRampQ').textContent = K.rampQ;
+    $('cTw').textContent = K.cls.tw; $('cAuto').textContent = K.cls.auto; $('cCar').textContent = K.cls.car; $('cHeavy').textContent = K.cls.heavy;
+
+    const qmax = 60;
+    $('qMain').textContent = Q.main.length; $('qMainBar').style.width = clamp(Q.main.length / qmax * 100, 0, 100) + '%';
+    $('qRamp').textContent = Q.ramp.length + K.rampQ; $('qRampBar').style.width = clamp((Q.ramp.length + K.rampQ) / qmax * 100, 0, 100) + '%';
+    $('qCol').textContent = Q.colony.length; $('qColBar').style.width = clamp(Q.colony.length / qmax * 100, 0, 100) + '%';
+
+    const rows = [['tw', 'Two-wheeler', 'var(--sky)'], ['auto', 'Auto', '#35c24f'], ['car', 'Car', '#d6dbe4'], ['heavy', 'Bus / truck', '#d9433b']];
+    $('classSpeeds').innerHTML = rows.map(([k, n, colr]) => {
+      const v = K.cls[k] ? K.clsSp[k] / K.cls[k] * 3.6 : 0;
+      return `<span>${n}</span><div class="bar"><span style="background:${colr};width:${clamp(v / 65 * 100, 0, 100).toFixed(0)}%"></span></div><span class="num text-right">${K.cls[k] ? v.toFixed(0) : '–'}</span>`;
+    }).join('');
+
+    $('clock').textContent = fmtClock(S.simTime);
+    const peakLeft = S.peakUntil - S.simTime;
+    const pb = $('btnPeak');
+    if (peakLeft > 0) { pb.classList.add('active'); pb.textContent = `Peak hour active · ${Math.floor(peakLeft / 60)}:${String(Math.floor(peakLeft % 60)).padStart(2, '0')}`; }
+    else { pb.classList.remove('active'); pb.textContent = 'Trigger Sarai Kale Khan peak hour'; }
+
+    if (now - lastSpark > 1000) {
+      lastSpark = now;
+      drawSpark($('sparkDeg'), hist, 'deg', 100, '#ef6b4d');
+      const m = drawSpark($('sparkThr'), hist, 'thr', 0, '#5cc8ff');
+      $('sparkDegVal').textContent = K.deg.toFixed(0) + ' %';
+      $('sparkThrVal').textContent = `${K.thr.toFixed(0)} now · scale 0–${m}`;
+    }
+  }
+
+  function syncLayoutUI() {
+    $('row').value = S.row; $('rowVal').textContent = S.row;
+    $('cwVal').textContent = G.mainW.toFixed(1); $('bnVal').textContent = G.bnW.toFixed(1);
+    $('presetPooling').setAttribute('aria-pressed', S.preset === 'pooling');
+    $('presetUnauth').setAttribute('aria-pressed', S.preset === 'unauth');
+    $('presetDesc').textContent = S.preset === 'pooling'
+      ? 'Wide sector grid with an 11 m connector. High initial volume: about 1,300 veh/h join near the merge.'
+      : 'Narrow organic lane, 4.5 m wide, with an encroachment that drops it to 2.6 m at the mouth. Mostly two-wheelers and autos.';
+    $('qColLabel').textContent = S.preset === 'pooling' ? 'Sector road' : 'Colony lane';
+    const m = S.demand / 100;
+    $('demandDesc').textContent = `Ring Road ${Math.round(BASE_RATE.main * m)} · ramp ${Math.round(BASE_RATE.ramp * m)} · ${S.preset === 'pooling' ? 'sector' : 'colony'} ${Math.round(COLONY_RATE[S.preset] * m)} veh/h`;
+    $('barrierNote').hidden = !G.barrierBlocked;
+    $('barrierNote').textContent = `Needs at least 6 m of carriageway; now ${G.mainW.toFixed(1)} m.`;
+    for (const [id, key] of [['solMergeRow', 'merge'], ['solBarrierRow', 'barrier'], ['solMeterRow', 'meter']]) $(id).classList.toggle('on', S.sol[key]);
+  }
+  function syncMixUI() {
+    const tot = S.mix.tw + S.mix.car + S.mix.auto + S.mix.heavy || 1;
+    const pct = k => Math.round(S.mix[k] / tot * 100);
+    const spans = $('mixBar').children;
+    ['tw', 'car', 'auto', 'heavy'].forEach((k, i) => { spans[i].style.width = (S.mix[k] / tot * 100) + '%'; });
+    $('mixTwVal').textContent = pct('tw') + '%'; $('mixCarVal').textContent = pct('car') + '%';
+    $('mixAutoVal').textContent = pct('auto') + '%'; $('mixHeavyVal').textContent = pct('heavy') + '%';
+  }
+
+  let toastTimer = 0;
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.style.opacity = 1;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.opacity = 0; }, 1800);
+  }
+
+  function resetSim() {
+    V = []; Q.main.length = Q.ramp.length = Q.colony.length = 0;
+    exitLog = []; delayRing = []; confLog = []; hist = [];
+    S.simTime = 0; S.peakUntil = -1; nextKpiT = 0; nextHistT = 0;
+    Object.assign(K, { deg: 0, delay: null, thr: 0, bnOcc: 0, mergeOcc: 0, conf: 0, inNet: 0, rampQ: 0, thrMax: 0, level: 'ok', inRate: { main: 0, ramp: 0, colony: 0 } });
+    G.meterGreen = true; G.meterT = 0;
+  }
+  function prewarm(seconds) {
+    const n = Math.round(seconds / H_STEP);
+    for (let i = 0; i < n; i++) step(H_STEP);
+  }
+
+  function setPressed(groupSel, attr, val) {
+    document.querySelectorAll(groupSel).forEach(b => b.setAttribute('aria-pressed', b.dataset[attr] === String(val)));
+  }
+
+  function bindUI() {
+    $('btnPlay').addEventListener('click', togglePlay);
+    $('btnReset').addEventListener('click', () => { resetSim(); prewarm(20); toast('Simulation reset'); });
+    document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { S.speed = +b.dataset.speed; setPressed('[data-speed]', 'speed', S.speed); }));
+    document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { S.view = b.dataset.view; VW.target = { ...VIEWS[S.view] }; setPressed('[data-view]', 'view', S.view); }));
+    document.querySelectorAll('[data-color]').forEach(b => b.addEventListener('click', () => { S.colorMode = b.dataset.color; setPressed('[data-color]', 'color', S.colorMode); }));
+    $('btnPeak').addEventListener('click', triggerPeak);
+
+    const setPreset = p => {
+      if (S.preset === p) return;
+      S.preset = p; S.row = p === 'pooling' ? 45 : 18;
+      Q.colony.length = 0;
+      buildGeometry(); syncLayoutUI();
+      toast(p === 'pooling' ? 'Planned land pooling sector loaded' : 'Unauthorised colony access road loaded');
+    };
+    $('presetPooling').addEventListener('click', () => setPreset('pooling'));
+    $('presetUnauth').addEventListener('click', () => setPreset('unauth'));
+    $('row').addEventListener('input', e => { S.row = +e.target.value; buildGeometry(); syncLayoutUI(); });
+    $('demand').addEventListener('input', e => { S.demand = +e.target.value; $('demandVal').textContent = S.demand; syncLayoutUI(); });
+    for (const [id, k] of [['mixTw', 'tw'], ['mixCar', 'car'], ['mixAuto', 'auto'], ['mixHeavy', 'heavy']])
+      $(id).addEventListener('input', e => { S.mix[k] = +e.target.value; syncMixUI(); });
+    for (const [id, k, on, off] of [
+      ['solMerge', 'merge', 'Extended parallel merger lane applied', 'Merger lane removed'],
+      ['solBarrier', 'barrier', 'Bullnose channelizers placed', 'Channelizers removed'],
+      ['solMeter', 'meter', 'Ramp meter switched on', 'Ramp meter switched off']])
+      $(id).addEventListener('change', e => { S.sol[k] = e.target.checked; buildGeometry(); syncLayoutUI(); toast(e.target.checked ? on : off); });
+
+    $('btnBaseline').addEventListener('click', () => {
+      baseline = { deg: K.deg, delay: K.delay, thr: K.thr, occ: K.bnOcc };
+      const sols = Object.entries(S.sol).filter(([, v]) => v).map(([k]) => ({ merge: 'merger lane', barrier: 'channelizers', meter: 'ramp meter' })[k]);
+      $('baselineText').textContent = `Pinned at ${fmtClock(S.simTime)}: ${S.preset === 'pooling' ? 'land pooling' : 'unauthorised colony'}, ${S.row} m RoW, ${sols.length ? sols.join(' + ') : 'no solutions'}. Degradation ${K.deg.toFixed(0)} %, delay ${K.delay == null ? '–' : K.delay.toFixed(1) + ' s'}, ${K.thr.toFixed(0)} veh/min.`;
+      $('btnClearBaseline').hidden = false;
+      toast('Baseline pinned');
+    });
+    $('btnClearBaseline').addEventListener('click', () => {
+      baseline = null; $('btnClearBaseline').hidden = true;
+      $('baselineText').textContent = 'Pin the KPIs before switching a solution on. Each KPI tile then shows the change against the pinned values.';
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      const r = canvas.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      mouse = { px, py, wx: (px - VW.ox) / VW.sc, wy: (py - VW.oy) / VW.sc };
+    });
+    canvas.addEventListener('pointerleave', () => { mouse = null; });
+    canvas.addEventListener('click', e => {
+      const r = canvas.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      const wx = (px - VW.ox) / VW.sc, wy = (py - VW.oy) / VW.sc;
+      const hit = V.find(p => p.stalled && Math.hypot(p.x - wx, p.y - wy) < 5);
+      if (hit) { V.splice(V.indexOf(hit), 1); toast('Breakdown cleared'); return; }
+      if (roadQuery(wx, wy, 0).c < 1) { toast('Click on the carriageway to drop a breakdown'); return; }
+      let best = null, bd = 1e9;
+      for (const key of ['main', 'ramp', 'colony']) {
+        const P = G.paths[key], k = nearestIdx(P, wx, wy, 0, P.n - 1), d = Math.hypot(P.x[k] - wx, P.y[k] - wy);
+        if (d < bd) { bd = d; best = { P, k }; }
+      }
+      const stalled = V.filter(p => p.stalled);
+      if (stalled.length >= 6) V.splice(V.indexOf(stalled[0]), 1);
+      const T = TYPES.heavy, h = Math.atan2(best.P.ty[best.k], best.P.tx[best.k]);
+      V.push({ id: nextId++, type: 'heavy', sub: 'stalled', T, route: null, path: null, x: wx, y: wy, vx: 0, vy: 0, h, hx: Math.cos(h), hy: Math.sin(h),
+        len: 8, wid: 2.5, ca: 2.75, v0: 1, lat: 0, curLat: 0, idx: 0, s: 0, tArr: S.simTime, stalled: true, ax: 0, ay: 0, brake: false, ff: 0, color: '#6b6f78' });
+      toast('Breakdown dropped. Click it again to clear');
+    });
+    window.addEventListener('keydown', e => {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'button') return;
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      else if (e.key === 'r' || e.key === 'R') $('btnReset').click();
+      else if (e.key === 'p' || e.key === 'P') triggerPeak();
+    });
+    new ResizeObserver(resize).observe($('canvasWrap'));
+  }
+  function togglePlay() {
+    S.running = !S.running;
+    $('playLabel').textContent = S.running ? 'Pause' : 'Play';
+    $('btnPlay').setAttribute('aria-label', S.running ? 'Pause simulation' : 'Play simulation');
+    $('playIcon').innerHTML = S.running
+      ? '<rect x="2" y="1.5" width="2.6" height="9" fill="currentColor"/><rect x="7.4" y="1.5" width="2.6" height="9" fill="currentColor"/>'
+      : '<path d="M2.5 1.5 L10.5 6 L2.5 10.5 Z" fill="currentColor"/>';
+  }
+  function triggerPeak() {
+    S.peakUntil = S.simTime + 150;
+    for (const [src, n] of [['main', 40], ['ramp', 30], ['colony', S.preset === 'pooling' ? 25 : 14]])
+      for (let i = 0; i < n; i++) if (Q[src].length < 400) Q[src].push({ t: S.simTime, type: pickType(src) });
+    toast('Peak hour: demand ×1.7 for 2½ sim-minutes');
+  }
+
+  /* =========================================================
+     MAIN LOOP
+     ========================================================= */
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.1) dt = 0.1;
+    if (S.running) {
+      acc += dt * S.speed;
+      let n = 0;
+      while (acc >= H_STEP && n < 12) { step(H_STEP); acc -= H_STEP; n++; }
+      if (n === 12) acc = 0;
+    }
+    updateView(dt);
+    render(now);
+    uiTick(now);
+    requestAnimationFrame(frame);
+  }
+
+  function init() {
+    buildGeometry();
+    syncLayoutUI(); syncMixUI();
+    bindUI();
+    resize();
+    prewarm(40);
+    computeKPIs();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { roadDirty = true; });
+    requestAnimationFrame(frame);
+  }
+  init();
+})();
+</script>
+</body>
+</html>
